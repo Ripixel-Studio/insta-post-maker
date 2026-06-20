@@ -1,0 +1,73 @@
+import { stageHolder } from './canvas/stageHolder';
+import type { Design } from './types';
+
+export type ExportFormat = 'png' | 'jpeg';
+
+export interface ExportOptions {
+  format: ExportFormat;
+  /** 1 = exact preset pixels (e.g. 1080-wide); 2 = @2x for extra crispness. */
+  multiplier: 1 | 2;
+  /** JPEG quality 0..1 (ignored for PNG). */
+  quality?: number;
+}
+
+/**
+ * Render the current design to an image blob at true document resolution,
+ * independent of the on-screen display scale.
+ *
+ * The stage is displayed scaled-to-fit (stage.width() === design.width * scale),
+ * so a pixelRatio of (design.width / stage.width()) renders back at 1:1 — i.e.
+ * exactly `design.width` px wide. The @2x option doubles that.
+ */
+export async function exportDesign(
+  design: Design,
+  opts: ExportOptions,
+): Promise<Blob> {
+  const stage = stageHolder.current;
+  if (!stage) throw new Error('Canvas is not ready yet.');
+
+  // Ensure all (possibly Google-CDN) fonts are loaded before rasterising,
+  // otherwise text can render in a fallback face.
+  if (document.fonts?.ready) await document.fonts.ready;
+
+  // Detach the selection transformer/handles so they don't appear in output.
+  const transformers = stage.find('Transformer');
+  const restore = transformers.map((t) => {
+    const wasVisible = t.visible();
+    t.visible(false);
+    return () => t.visible(wasVisible);
+  });
+  stage.batchDraw();
+
+  const basePixelRatio = design.width / stage.width();
+  const pixelRatio = basePixelRatio * opts.multiplier;
+  const mimeType = opts.format === 'png' ? 'image/png' : 'image/jpeg';
+
+  try {
+    const blob: Blob = await new Promise((resolve, reject) => {
+      stage.toBlob({
+        mimeType,
+        quality: opts.quality ?? 0.92,
+        pixelRatio,
+        callback: (b) => (b ? resolve(b) : reject(new Error('Export failed'))),
+      });
+    });
+    return blob;
+  } finally {
+    restore.forEach((fn) => fn());
+    stage.batchDraw();
+  }
+}
+
+/** Trigger a browser download of an exported blob. */
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoke on the next tick so the download has a chance to start.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

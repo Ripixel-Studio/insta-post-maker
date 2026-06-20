@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  background: #0b0d10;
+  color: #e6e8eb;
+  overscroll-behavior: none;
+}
+
+/* Disable the browser's default touch panning on the canvas surface so
+   Konva gestures (drag / pinch) work cleanly on touch devices. */
+.canvas-surface {
+  touch-action: none;
+}
