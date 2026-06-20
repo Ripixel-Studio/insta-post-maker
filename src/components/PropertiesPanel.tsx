@@ -1,6 +1,32 @@
 import { useEditor } from '../store';
 import { FONTS } from '../fonts';
-import type { Layer, TextLayer, OverlayLayer, GradientDirection } from '../types';
+import { FILTER_PRESETS } from '../filters';
+import { PRESETS } from '../presets';
+import type {
+  Layer,
+  ImageLayer,
+  TextLayer,
+  OverlayLayer,
+  ShapeLayer,
+  GradientDirection,
+} from '../types';
+
+const BLEND_MODES: GlobalCompositeOperation[] = [
+  'source-over',
+  'multiply',
+  'screen',
+  'overlay',
+  'darken',
+  'lighten',
+  'color-dodge',
+  'soft-light',
+  'hard-light',
+  'difference',
+  'exclusion',
+];
+
+const inputCls =
+  'w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-zinc-100 outline-none focus:border-violet-400';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -13,8 +39,37 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inputCls =
-  'w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-sm text-zinc-100 outline-none focus:border-violet-400';
+function Slider({
+  label,
+  min,
+  max,
+  step,
+  value,
+  onChange,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <Field label={label}>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        className="w-full accent-violet-500"
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </Field>
+  );
+}
+
+/* ----------------------------- Layers list ----------------------------- */
 
 function LayersList() {
   const layers = useEditor((s) => s.design.layers);
@@ -32,7 +87,6 @@ function LayersList() {
       {layers.length === 0 && (
         <p className="text-sm text-zinc-500">No layers yet. Add an image, text or gradient.</p>
       )}
-      {/* Topmost layer first in the panel (reverse of paint order). */}
       <ul className="flex flex-col gap-1">
         {[...layers].reverse().map((layer) => (
           <li
@@ -46,7 +100,7 @@ function LayersList() {
               title={layer.visible ? 'Hide' : 'Show'}
               onClick={() => updateLayer(layer.id, { visible: !layer.visible })}
             >
-              {layer.visible ? '👁' : '🚫'}
+              {layer.visible ? '👁' : '🙈'}
             </button>
             <button className="flex-1 truncate text-left" onClick={() => select(layer.id)}>
               {layer.name}
@@ -64,42 +118,129 @@ function LayersList() {
   );
 }
 
+/* ----------------------------- Common props ----------------------------- */
+
 function CommonProps({ layer }: { layer: Layer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
+  const flipLayer = useEditor((s) => s.flipLayer);
   return (
-    <Field label={`Opacity — ${Math.round(layer.opacity * 100)}%`}>
-      <input
-        type="range"
+    <>
+      <Slider
+        label={`Opacity — ${Math.round(layer.opacity * 100)}%`}
         min={0}
         max={1}
         step={0.01}
         value={layer.opacity}
-        className="w-full accent-violet-500"
-        onChange={(e) => updateLayer(layer.id, { opacity: Number(e.target.value) })}
+        onChange={(v) => updateLayer(layer.id, { opacity: v })}
       />
-    </Field>
+      <Field label="Blend mode">
+        <select
+          className={inputCls}
+          value={layer.blendMode}
+          onChange={(e) =>
+            updateLayer(layer.id, { blendMode: e.target.value as GlobalCompositeOperation })
+          }
+        >
+          {BLEND_MODES.map((m) => (
+            <option key={m} value={m}>
+              {m === 'source-over' ? 'normal' : m}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Flip & lock">
+        <div className="flex gap-1">
+          <button className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+            onClick={() => flipLayer(layer.id, 'x')}>Flip H</button>
+          <button className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+            onClick={() => flipLayer(layer.id, 'y')}>Flip V</button>
+          <button
+            className={`flex-1 rounded-md px-2 py-1.5 text-sm ${
+              layer.locked ? 'bg-violet-500 text-white' : 'bg-white/5 hover:bg-white/10'
+            }`}
+            onClick={() => updateLayer(layer.id, { locked: !layer.locked })}
+          >
+            {layer.locked ? 'Locked' : 'Lock'}
+          </button>
+        </div>
+      </Field>
+    </>
   );
 }
+
+/* ------------------------------- Image ------------------------------- */
+
+function ImageProps({ layer }: { layer: ImageLayer }) {
+  const updateLayer = useEditor((s) => s.updateLayer);
+  const setCropTarget = useEditor((s) => s.setCropTarget);
+  const f = layer.filters;
+  const setFilter = (patch: Partial<ImageLayer['filters']>) =>
+    updateLayer(layer.id, { filters: { ...f, ...patch } });
+
+  return (
+    <>
+      <Field label="Crop">
+        <div className="flex gap-1">
+          <button
+            className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+            onClick={() => setCropTarget(layer.id)}
+          >
+            ✂ Crop image
+          </button>
+          {layer.crop && (
+            <button
+              className="rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+              onClick={() => updateLayer(layer.id, { crop: undefined })}
+              title="Remove crop"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </Field>
+
+      <Field label="Filter preset">
+        <div className="grid grid-cols-3 gap-1">
+          {FILTER_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              className="rounded-md bg-white/5 px-1 py-1.5 text-xs hover:bg-white/10"
+              onClick={() => updateLayer(layer.id, { filters: { ...p.values } })}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <Slider label={`Brightness — ${f.brightness.toFixed(2)}`} min={-1} max={1} step={0.01}
+        value={f.brightness} onChange={(v) => setFilter({ brightness: v })} />
+      <Slider label={`Contrast — ${f.contrast}`} min={-100} max={100} step={1}
+        value={f.contrast} onChange={(v) => setFilter({ contrast: v })} />
+      <Slider label={`Saturation — ${f.saturation.toFixed(2)}`} min={-1} max={1} step={0.01}
+        value={f.saturation} onChange={(v) => setFilter({ saturation: v })} />
+      <Slider label={`Blur — ${f.blur}px`} min={0} max={40} step={1}
+        value={f.blur} onChange={(v) => setFilter({ blur: v })} />
+    </>
+  );
+}
+
+/* -------------------------------- Text -------------------------------- */
 
 function TextProps({ layer }: { layer: TextLayer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
   const patch = (p: Partial<TextLayer>) => updateLayer(layer.id, p);
+
   return (
     <>
       <Field label="Text">
-        <textarea
-          className={inputCls}
-          rows={2}
-          value={layer.text}
-          onChange={(e) => patch({ text: e.target.value })}
-        />
+        <textarea className={inputCls} rows={2} value={layer.text}
+          onChange={(e) => patch({ text: e.target.value })} />
       </Field>
       <Field label="Font">
         <select className={inputCls} value={layer.fontFamily}
           onChange={(e) => patch({ fontFamily: e.target.value })}>
-          {FONTS.map((f) => (
-            <option key={f.family} value={f.family}>{f.family}</option>
-          ))}
+          {FONTS.map((ft) => <option key={ft.family} value={ft.family}>{ft.family}</option>)}
         </select>
       </Field>
       <div className="flex gap-2">
@@ -134,9 +275,60 @@ function TextProps({ layer }: { layer: TextLayer }) {
           ))}
         </div>
       </Field>
+      <Slider label={`Line height — ${layer.lineHeight.toFixed(2)}`} min={0.7} max={3} step={0.05}
+        value={layer.lineHeight} onChange={(v) => patch({ lineHeight: v })} />
+      <Slider label={`Letter spacing — ${layer.letterSpacing}`} min={-10} max={40} step={1}
+        value={layer.letterSpacing} onChange={(v) => patch({ letterSpacing: v })} />
+
+      {/* Shadow */}
+      <div className="mb-2 mt-1 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Shadow</span>
+        <input type="checkbox" className="accent-violet-500" checked={layer.shadow.enabled}
+          onChange={(e) => patch({ shadow: { ...layer.shadow, enabled: e.target.checked } })} />
+      </div>
+      {layer.shadow.enabled && (
+        <div className="flex gap-2">
+          <Field label="Color">
+            <input type="color" className="h-9 w-full rounded-md bg-white/5"
+              value={layer.shadow.color.startsWith('#') ? layer.shadow.color : '#000000'}
+              onChange={(e) => patch({ shadow: { ...layer.shadow, color: e.target.value } })} />
+          </Field>
+          <Field label="Blur">
+            <input type="number" className={inputCls} value={layer.shadow.blur}
+              onChange={(e) => patch({ shadow: { ...layer.shadow, blur: Number(e.target.value) } })} />
+          </Field>
+        </div>
+      )}
+
+      {/* Background pill */}
+      <div className="mb-2 mt-1 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Background</span>
+        <input type="checkbox" className="accent-violet-500" checked={layer.background.enabled}
+          onChange={(e) => patch({ background: { ...layer.background, enabled: e.target.checked } })} />
+      </div>
+      {layer.background.enabled && (
+        <>
+          <div className="flex gap-2">
+            <Field label="Color">
+              <input type="color" className="h-9 w-full rounded-md bg-white/5"
+                value={layer.background.color.startsWith('#') ? layer.background.color : '#000000'}
+                onChange={(e) => patch({ background: { ...layer.background, color: e.target.value } })} />
+            </Field>
+            <Field label="Radius">
+              <input type="number" className={inputCls} value={layer.background.cornerRadius}
+                onChange={(e) => patch({ background: { ...layer.background, cornerRadius: Number(e.target.value) } })} />
+            </Field>
+          </div>
+          <Slider label={`Padding — ${layer.background.padding}px`} min={0} max={80} step={1}
+            value={layer.background.padding}
+            onChange={(v) => patch({ background: { ...layer.background, padding: v } })} />
+        </>
+      )}
     </>
   );
 }
+
+/* ------------------------------- Overlay ------------------------------- */
 
 function OverlayProps({ layer }: { layer: OverlayLayer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
@@ -157,57 +349,120 @@ function OverlayProps({ layer }: { layer: OverlayLayer }) {
         <div className="flex flex-col gap-2">
           {layer.stops.map((s, i) => (
             <div key={i} className="flex items-center gap-2">
-              <input
-                type="color"
-                className="h-8 w-12 rounded bg-white/5"
-                // Strip alpha for the native picker; alpha stays as authored.
+              <input type="color" className="h-8 w-12 rounded bg-white/5"
                 value={s.color.startsWith('#') ? s.color : '#000000'}
-                onChange={(e) => setStop(i, e.target.value)}
-              />
+                onChange={(e) => setStop(i, e.target.value)} />
               <span className="text-xs text-zinc-400">offset {s.offset}</span>
             </div>
           ))}
         </div>
         <p className="mt-1 text-xs text-zinc-500">
-          Tip: the default black→transparent scrim boosts text legibility over photos.
+          The default black→transparent scrim boosts text legibility over photos.
         </p>
       </Field>
     </>
   );
 }
 
+/* -------------------------------- Shape -------------------------------- */
+
+function ShapeProps({ layer }: { layer: ShapeLayer }) {
+  const updateLayer = useEditor((s) => s.updateLayer);
+  const patch = (p: Partial<ShapeLayer>) => updateLayer(layer.id, p);
+  return (
+    <>
+      {layer.shape !== 'line' && (
+        <div className="flex gap-2">
+          <Field label="Fill">
+            <input type="color" className="h-9 w-full rounded-md bg-white/5" value={layer.fill}
+              onChange={(e) => patch({ fill: e.target.value })} />
+          </Field>
+          {layer.shape === 'rect' && (
+            <Field label="Radius">
+              <input type="number" className={inputCls} value={layer.cornerRadius}
+                onChange={(e) => patch({ cornerRadius: Number(e.target.value) })} />
+            </Field>
+          )}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Field label={layer.shape === 'line' ? 'Color' : 'Stroke'}>
+          <input type="color" className="h-9 w-full rounded-md bg-white/5"
+            value={layer.shape === 'line' ? layer.fill : layer.stroke}
+            onChange={(e) =>
+              patch(layer.shape === 'line' ? { fill: e.target.value } : { stroke: e.target.value })
+            } />
+        </Field>
+        <Field label={layer.shape === 'line' ? 'Thickness' : 'Stroke width'}>
+          <input type="number" className={inputCls} value={layer.strokeWidth}
+            onChange={(e) => patch({ strokeWidth: Number(e.target.value) })} />
+        </Field>
+      </div>
+    </>
+  );
+}
+
+/* ----------------------------- Canvas panel ----------------------------- */
+
+function CanvasProps() {
+  const design = useEditor((s) => s.design);
+  const setBackground = useEditor((s) => s.setBackground);
+  const setCanvasSize = useEditor((s) => s.setCanvasSize);
+  const activePreset = PRESETS.find(
+    (p) => p.width === design.width && p.height === design.height,
+  );
+  return (
+    <div>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Canvas</h3>
+      <Field label="Background">
+        <input type="color" className="h-9 w-full rounded-md bg-white/5"
+          value={design.background} onChange={(e) => setBackground(e.target.value)} />
+      </Field>
+      <Field label="Size (px)">
+        <div className="flex items-center gap-2">
+          <input type="number" className={inputCls} value={design.width}
+            onChange={(e) => setCanvasSize(Number(e.target.value), design.height)} />
+          <span className="text-zinc-500">×</span>
+          <input type="number" className={inputCls} value={design.height}
+            onChange={(e) => setCanvasSize(design.width, Number(e.target.value))} />
+        </div>
+      </Field>
+      <p className="text-sm text-zinc-500">
+        {activePreset ? `${activePreset.label} preset` : 'Custom size'}. Select a layer to edit it.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------- Panel ------------------------------- */
+
 export function PropertiesPanel() {
   const selectedId = useEditor((s) => s.selectedId);
   const design = useEditor((s) => s.design);
-  const setBackground = useEditor((s) => s.setBackground);
+  const removeLayer = useEditor((s) => s.removeLayer);
+  const duplicateLayer = useEditor((s) => s.duplicateLayer);
   const layer = design.layers.find((l) => l.id === selectedId) ?? null;
 
   return (
     <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-white/10 bg-[#14161b] p-4">
-      {!layer && (
-        <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            Canvas
-          </h3>
-          <Field label="Background">
-            <input type="color" className="h-9 w-full rounded-md bg-white/5"
-              value={design.background}
-              onChange={(e) => setBackground(e.target.value)} />
-          </Field>
-          <p className="text-sm text-zinc-500">
-            {design.width} × {design.height}px. Select a layer to edit it.
-          </p>
-        </div>
-      )}
+      {!layer && <CanvasProps />}
 
       {layer && (
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            {layer.name}
-          </h3>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3 className="truncate text-sm font-semibold text-white">{layer.name}</h3>
+            <div className="flex gap-1">
+              <button className="rounded-md bg-white/5 px-2 py-1 text-xs hover:bg-white/10"
+                title="Duplicate (⌘D)" onClick={() => duplicateLayer(layer.id)}>⧉</button>
+              <button className="rounded-md bg-white/5 px-2 py-1 text-xs hover:bg-white/10"
+                title="Delete" onClick={() => removeLayer(layer.id)}>🗑</button>
+            </div>
+          </div>
           <CommonProps layer={layer} />
+          {layer.type === 'image' && <ImageProps layer={layer as ImageLayer} />}
           {layer.type === 'text' && <TextProps layer={layer as TextLayer} />}
           {layer.type === 'overlay' && <OverlayProps layer={layer as OverlayLayer} />}
+          {layer.type === 'shape' && <ShapeProps layer={layer as ShapeLayer} />}
         </div>
       )}
 

@@ -19,6 +19,7 @@ export function Toolbar() {
   const addImageLayer = useEditor((s) => s.addImageLayer);
   const addTextLayer = useEditor((s) => s.addTextLayer);
   const addOverlayLayer = useEditor((s) => s.addOverlayLayer);
+  const addShapeLayer = useEditor((s) => s.addShapeLayer);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
   const canUndo = useEditor((s) => s.past.length > 0);
@@ -94,6 +95,20 @@ export function Toolbar() {
       <button className={btn()} onClick={addOverlayLayer}>
         + Gradient
       </button>
+      <select
+        className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/10"
+        value=""
+        onChange={(e) => {
+          if (e.target.value) addShapeLayer(e.target.value as 'rect' | 'ellipse' | 'line');
+          e.target.value = '';
+        }}
+        title="Add a shape"
+      >
+        <option value="">+ Shape</option>
+        <option value="rect">Rectangle</option>
+        <option value="ellipse">Ellipse</option>
+        <option value="line">Line</option>
+      </select>
       <input
         ref={fileRef}
         type="file"

@@ -13,10 +13,35 @@ export function useShortcuts() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (isEditingText(e.target)) return;
-      const { undo, redo, selectedId, removeLayer, updateLayer, design, select } =
-        useEditor.getState();
+      const {
+        undo,
+        redo,
+        selectedId,
+        removeLayer,
+        updateLayer,
+        duplicateLayer,
+        design,
+        select,
+        cropTargetId,
+        setCropTarget,
+        editingTextId,
+      } = useEditor.getState();
+
+      // In crop mode, only allow Escape (cancel); swallow everything else so we
+      // don't e.g. delete the image being cropped.
+      if (cropTargetId) {
+        if (e.key === 'Escape') setCropTarget(null);
+        return;
+      }
+      if (editingTextId) return;
 
       const meta = e.metaKey || e.ctrlKey;
+
+      if (meta && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        if (selectedId) duplicateLayer(selectedId);
+        return;
+      }
 
       if (meta && e.key.toLowerCase() === 'z') {
         e.preventDefault();

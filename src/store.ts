@@ -3,15 +3,18 @@ import { produce } from 'immer';
 import type {
   Design,
   Layer,
+  BaseLayer,
   ImageLayer,
   TextLayer,
   OverlayLayer,
+  ShapeLayer,
   CanvasPreset,
 } from './types';
+import { NO_FILTERS } from './types';
 import { DEFAULT_PRESET } from './presets';
 import { nextId, getAsset } from './assets';
 
-function emptyDesign(preset: CanvasPreset): Design {
+export function emptyDesign(preset: CanvasPreset): Design {
   return {
     width: preset.width,
     height: preset.height,
@@ -20,25 +23,55 @@ function emptyDesign(preset: CanvasPreset): Design {
   };
 }
 
+/** Shared defaults for a new layer's transform/appearance fields. */
+function baseLayer(
+  type: Layer['type'],
+  name: string,
+  box: { x: number; y: number; width: number; height: number },
+): BaseLayer {
+  return {
+    id: nextId('layer'),
+    type,
+    name,
+    ...box,
+    rotation: 0,
+    flipX: false,
+    flipY: false,
+    opacity: 1,
+    blendMode: 'source-over',
+    visible: true,
+    locked: false,
+  };
+}
+
 interface EditorState {
   design: Design;
   selectedId: string | null;
-  /** Snapshots for undo/redo. We snapshot whole designs — simple and robust
-   * for the layer counts this tool deals with (dozens, not thousands). */
   past: Design[];
   future: Design[];
 
+  /** Ephemeral UI modes (not part of undo history). */
+  cropTargetId: string | null;
+  editingTextId: string | null;
+  setCropTarget: (id: string | null) => void;
+  setEditingText: (id: string | null) => void;
+
   setPreset: (preset: CanvasPreset) => void;
+  setCanvasSize: (width: number, height: number) => void;
   setBackground: (color: string) => void;
   select: (id: string | null) => void;
+  loadDesign: (design: Design) => void;
 
-  addImageLayer: (assetId: string) => void;
+  addImageLayer: (assetId: string) => string;
   addTextLayer: () => void;
   addOverlayLayer: () => void;
+  addShapeLayer: (shape: ShapeLayer['shape']) => void;
 
   updateLayer: (id: string, patch: Partial<Layer>) => void;
   removeLayer: (id: string) => void;
+  duplicateLayer: (id: string) => void;
   moveLayer: (id: string, dir: 'up' | 'down') => void;
+  flipLayer: (id: string, axis: 'x' | 'y') => void;
 
   undo: () => void;
   redo: () => void;
@@ -63,11 +96,22 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedId: null,
     past: [],
     future: [],
+    cropTargetId: null,
+    editingTextId: null,
+
+    setCropTarget: (id) => set({ cropTargetId: id }),
+    setEditingText: (id) => set({ editingTextId: id }),
 
     setPreset: (preset) =>
       commit((d) => {
         d.width = preset.width;
         d.height = preset.height;
+      }),
+
+    setCanvasSize: (width, height) =>
+      commit((d) => {
+        d.width = Math.max(64, Math.round(width));
+        d.height = Math.max(64, Math.round(height));
       }),
 
     setBackground: (color) =>
@@ -77,43 +121,47 @@ export const useEditor = create<EditorState>((set, get) => {
 
     select: (id) => set({ selectedId: id }),
 
+    loadDesign: (design) =>
+      set({ design, selectedId: null, past: [], future: [] }),
+
     addImageLayer: (assetId) => {
       const asset = getAsset(assetId);
-      if (!asset) return;
       const { design } = get();
-      // Fit the image inside the canvas while preserving aspect ratio.
+      const sourceW = asset?.width ?? design.width;
+      const sourceH = asset?.height ?? design.height;
       const scale = Math.min(
-        (design.width * 0.8) / asset.width,
-        (design.height * 0.8) / asset.height,
+        (design.width * 0.8) / sourceW,
+        (design.height * 0.8) / sourceH,
         1,
       );
-      const w = asset.width * scale;
-      const h = asset.height * scale;
+      const w = sourceW * scale;
+      const h = sourceH * scale;
       const layer: ImageLayer = {
-        id: nextId('layer'),
+        ...baseLayer('image', 'Image', {
+          x: (design.width - w) / 2,
+          y: (design.height - h) / 2,
+          width: w,
+          height: h,
+        }),
         type: 'image',
-        name: 'Image',
         assetId,
-        x: (design.width - w) / 2,
-        y: (design.height - h) / 2,
-        width: w,
-        height: h,
-        rotation: 0,
-        opacity: 1,
-        blendMode: 'source-over',
-        visible: true,
-        locked: false,
+        filters: { ...NO_FILTERS },
       };
       commit((d) => void d.layers.push(layer));
       set({ selectedId: layer.id });
+      return layer.id;
     },
 
     addTextLayer: () => {
       const { design } = get();
       const layer: TextLayer = {
-        id: nextId('layer'),
+        ...baseLayer('text', 'Text', {
+          x: design.width * 0.1,
+          y: design.height * 0.45,
+          width: design.width * 0.8,
+          height: design.width * 0.16,
+        }),
         type: 'text',
-        name: 'Text',
         text: 'Double-click to edit',
         fontFamily: 'Inter',
         fontSize: Math.round(design.width * 0.08),
@@ -122,15 +170,19 @@ export const useEditor = create<EditorState>((set, get) => {
         align: 'center',
         lineHeight: 1.2,
         letterSpacing: 0,
-        x: design.width * 0.1,
-        y: design.height * 0.45,
-        width: design.width * 0.8,
-        height: design.width * 0.16,
-        rotation: 0,
-        opacity: 1,
-        blendMode: 'source-over',
-        visible: true,
-        locked: false,
+        shadow: {
+          enabled: false,
+          color: 'rgba(0,0,0,0.6)',
+          blur: 8,
+          offsetX: 0,
+          offsetY: 2,
+        },
+        background: {
+          enabled: false,
+          color: 'rgba(0,0,0,0.5)',
+          cornerRadius: 8,
+          padding: 12,
+        },
       };
       commit((d) => void d.layers.push(layer));
       set({ selectedId: layer.id });
@@ -138,26 +190,40 @@ export const useEditor = create<EditorState>((set, get) => {
 
     addOverlayLayer: () => {
       const { design } = get();
-      // Default to a bottom scrim (black→transparent, fading upward) — the
-      // classic "make text legible over a photo" overlay.
       const layer: OverlayLayer = {
-        id: nextId('layer'),
+        ...baseLayer('overlay', 'Gradient overlay', {
+          x: 0,
+          y: design.height * 0.5,
+          width: design.width,
+          height: design.height * 0.5,
+        }),
         type: 'overlay',
-        name: 'Gradient overlay',
         direction: 'to-top',
         stops: [
           { offset: 0, color: 'rgba(0,0,0,0.85)' },
           { offset: 1, color: 'rgba(0,0,0,0)' },
         ],
-        x: 0,
-        y: design.height * 0.5,
-        width: design.width,
-        height: design.height * 0.5,
-        rotation: 0,
-        opacity: 1,
-        blendMode: 'source-over',
-        visible: true,
-        locked: false,
+      };
+      commit((d) => void d.layers.push(layer));
+      set({ selectedId: layer.id });
+    },
+
+    addShapeLayer: (shape) => {
+      const { design } = get();
+      const size = design.width * 0.3;
+      const layer: ShapeLayer = {
+        ...baseLayer('shape', shape === 'line' ? 'Line' : shape === 'ellipse' ? 'Ellipse' : 'Rectangle', {
+          x: design.width * 0.35,
+          y: design.height * 0.4,
+          width: size,
+          height: shape === 'line' ? 8 : size,
+        }),
+        type: 'shape',
+        shape,
+        fill: shape === 'line' ? '#c084fc' : '#c084fc',
+        stroke: '#ffffff',
+        strokeWidth: shape === 'line' ? 6 : 0,
+        cornerRadius: 16,
       };
       commit((d) => void d.layers.push(layer));
       set({ selectedId: layer.id });
@@ -176,6 +242,21 @@ export const useEditor = create<EditorState>((set, get) => {
       if (get().selectedId === id) set({ selectedId: null });
     },
 
+    duplicateLayer: (id) => {
+      const { design } = get();
+      const src = design.layers.find((l) => l.id === id);
+      if (!src) return;
+      const copy: Layer = {
+        ...structuredClone(src),
+        id: nextId('layer'),
+        name: `${src.name} copy`,
+        x: src.x + 24,
+        y: src.y + 24,
+      };
+      commit((d) => void d.layers.push(copy));
+      set({ selectedId: copy.id });
+    },
+
     moveLayer: (id, dir) =>
       commit((d) => {
         const i = d.layers.findIndex((l) => l.id === id);
@@ -183,6 +264,14 @@ export const useEditor = create<EditorState>((set, get) => {
         const j = dir === 'up' ? i + 1 : i - 1;
         if (j < 0 || j >= d.layers.length) return;
         [d.layers[i], d.layers[j]] = [d.layers[j], d.layers[i]];
+      }),
+
+    flipLayer: (id, axis) =>
+      commit((d) => {
+        const layer = d.layers.find((l) => l.id === id);
+        if (!layer) return;
+        if (axis === 'x') layer.flipX = !layer.flipX;
+        else layer.flipY = !layer.flipY;
       }),
 
     undo: () => {
