@@ -4,9 +4,11 @@ import type Konva from 'konva';
 import { useEditor } from '../store';
 import { LayerNode } from './nodes';
 import { CropOverlay } from './CropOverlay';
+import { CollageView } from './CollageView';
 import { stageHolder } from './stageHolder';
 import { SmartGuides } from './SmartGuides';
 import { computeGuides, type Guide } from './guides';
+import { addImageAsset } from '../assets';
 import type { Layer, ImageLayer, TextLayer, CropRect } from '../types';
 
 /** Padding (px) around the canvas inside its viewport container. */
@@ -29,12 +31,28 @@ export function CanvasStage() {
   const setCropTarget = useEditor((s) => s.setCropTarget);
   const editingTextId = useEditor((s) => s.editingTextId);
   const setEditingText = useEditor((s) => s.setEditingText);
+  const selectCell = useEditor((s) => s.selectCell);
+  const updateCell = useEditor((s) => s.updateCell);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
+  const fillInputRef = useRef<HTMLInputElement>(null);
+  const pendingCellRef = useRef<string | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [guides, setGuides] = useState<Guide[]>([]);
+
+  async function onFillFile(file: File | undefined) {
+    const cellId = pendingCellRef.current;
+    pendingCellRef.current = null;
+    if (!file || !cellId || !file.type.startsWith('image/')) return;
+    try {
+      const asset = await addImageAsset(file);
+      updateCell(cellId, { assetId: asset.id, zoom: 1, offsetX: 0.5, offsetY: 0.5 });
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -81,6 +99,7 @@ export function CanvasStage() {
     if (cropTargetId) return;
     if (e.target === e.target.getStage() || e.target.name() === 'doc-background') {
       select(null);
+      selectCell(null);
     }
   };
 
@@ -102,6 +121,16 @@ export function CanvasStage() {
       ref={containerRef}
       className="canvas-surface relative flex h-full w-full items-center justify-center overflow-hidden"
     >
+      <input
+        ref={fillInputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          void onFillFile(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
       {scale > 0 && (
         <div className="relative shadow-2xl" style={{ width: stageWidth, height: stageHeight }}>
           <Stage
@@ -122,6 +151,18 @@ export function CanvasStage() {
                 height={design.height}
                 fill={design.background}
               />
+
+              {!cropTargetId && design.collage && (
+                <CollageView
+                  collage={design.collage}
+                  width={design.width}
+                  height={design.height}
+                  onRequestFill={(cellId) => {
+                    pendingCellRef.current = cellId;
+                    fillInputRef.current?.click();
+                  }}
+                />
+              )}
 
               {!cropTargetId &&
                 design.layers.map((layer) =>

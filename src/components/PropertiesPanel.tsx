@@ -1,7 +1,9 @@
+import { useRef } from 'react';
 import { useEditor } from '../store';
 import { FONTS } from '../fonts';
 import { FILTER_PRESETS } from '../filters';
 import { PRESETS } from '../presets';
+import { addImageAsset } from '../assets';
 import type {
   Layer,
   ImageLayer,
@@ -402,6 +404,82 @@ function ShapeProps({ layer }: { layer: ShapeLayer }) {
   );
 }
 
+/* ------------------------------- Collage ------------------------------- */
+
+function CellPanel({ cellId }: { cellId: string }) {
+  const design = useEditor((s) => s.design);
+  const updateCell = useEditor((s) => s.updateCell);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const cell = design.collage?.cells.find((c) => c.id === cellId);
+  if (!cell) return null;
+
+  async function replace(file: File | undefined) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const asset = await addImageAsset(file);
+    updateCell(cellId, { assetId: asset.id, zoom: 1, offsetX: 0.5, offsetY: 0.5 });
+  }
+
+  return (
+    <div>
+      <h3 className="mb-3 text-sm font-semibold text-white">Collage cell</h3>
+      <div className="mb-3 flex gap-1">
+        <button
+          className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+          onClick={() => fileRef.current?.click()}
+        >
+          {cell.assetId ? 'Replace photo' : 'Add photo'}
+        </button>
+        {cell.assetId && (
+          <button
+            className="rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+            onClick={() => updateCell(cellId, { assetId: undefined })}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          void replace(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+      {cell.assetId && (
+        <>
+          <Slider label={`Zoom — ${cell.zoom.toFixed(2)}×`} min={1} max={4} step={0.01}
+            value={cell.zoom} onChange={(v) => updateCell(cellId, { zoom: v })} />
+          <p className="text-sm text-zinc-500">Drag the photo inside its cell to reposition it.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function LayoutPanel() {
+  const collage = useEditor((s) => s.design.collage);
+  const updateCollage = useEditor((s) => s.updateCollage);
+  const clearCollage = useEditor((s) => s.clearCollage);
+  if (!collage) return null;
+  return (
+    <div className="border-t border-white/10 pt-4">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Layout</h3>
+      <Slider label={`Gap — ${collage.gap}px`} min={0} max={80} step={1}
+        value={collage.gap} onChange={(v) => updateCollage({ gap: v })} />
+      <p className="mb-2 text-sm text-zinc-500">Drag the gutters between cells to resize them.</p>
+      <button
+        className="w-full rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+        onClick={clearCollage}
+      >
+        Remove layout
+      </button>
+    </div>
+  );
+}
+
 /* ----------------------------- Canvas panel ----------------------------- */
 
 function CanvasProps() {
@@ -438,6 +516,7 @@ function CanvasProps() {
 
 export function PropertiesPanel() {
   const selectedId = useEditor((s) => s.selectedId);
+  const selectedCellId = useEditor((s) => s.selectedCellId);
   const design = useEditor((s) => s.design);
   const removeLayer = useEditor((s) => s.removeLayer);
   const duplicateLayer = useEditor((s) => s.duplicateLayer);
@@ -445,7 +524,14 @@ export function PropertiesPanel() {
 
   return (
     <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-white/10 bg-[#14161b] p-4">
-      {!layer && <CanvasProps />}
+      {selectedCellId && <CellPanel cellId={selectedCellId} />}
+
+      {!layer && !selectedCellId && (
+        <>
+          <CanvasProps />
+          <LayoutPanel />
+        </>
+      )}
 
       {layer && (
         <div>

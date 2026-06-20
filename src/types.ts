@@ -116,17 +116,30 @@ export interface ShapeLayer extends BaseLayer {
 
 export type Layer = ImageLayer | TextLayer | OverlayLayer | ShapeLayer;
 
-/** A collage grid: image frames laid out by recomputed cell geometry.
- * `splitsX`/`splitsY` are the normalised (0..1) divider positions so cells can
- * be made unequal by dragging gutters. */
-export interface CollageGrid {
+/** One image frame in a collage, spanning grid tracks [c0..c1] × [r0..r1].
+ * The image fills the cell (cover-fit) and can be panned (offset 0..1) and
+ * zoomed (>= 1) within it. */
+export interface CollageCell {
+  id: string;
+  c0: number;
+  c1: number;
+  r0: number;
+  r1: number;
+  assetId?: string;
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+/** A collage grid. `splitsX`/`splitsY` are normalised (0..1) interior divider
+ * positions, so cells become unequal by dragging the gutters. */
+export interface Collage {
   cols: number;
   rows: number;
   gap: number;
-  /** Internal vertical dividers (cols-1 of them), normalised 0..1. */
-  splitsX: number[];
-  /** Internal horizontal dividers (rows-1 of them), normalised 0..1. */
-  splitsY: number[];
+  splitsX: number[]; // length cols-1
+  splitsY: number[]; // length rows-1
+  cells: CollageCell[];
 }
 
 export interface Design {
@@ -134,6 +147,8 @@ export interface Design {
   height: number;
   background: string;
   layers: Layer[];
+  /** Optional collage grid, rendered beneath the free layers. */
+  collage?: Collage;
 }
 
 export interface CanvasPreset {

@@ -4,6 +4,7 @@ import { PRESETS } from '../presets';
 import { addImageAsset } from '../assets';
 import { exportDesign, downloadBlob, type ExportFormat } from '../export';
 import { ProjectsMenu } from './ProjectsMenu';
+import { LAYOUTS } from '../collage';
 
 function btn(active = false) {
   return [
@@ -21,6 +22,7 @@ export function Toolbar() {
   const addTextLayer = useEditor((s) => s.addTextLayer);
   const addOverlayLayer = useEditor((s) => s.addOverlayLayer);
   const addShapeLayer = useEditor((s) => s.addShapeLayer);
+  const applyLayout = useEditor((s) => s.applyLayout);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
   const canUndo = useEditor((s) => s.past.length > 0);
@@ -113,6 +115,23 @@ export function Toolbar() {
         <option value="rect">Rectangle</option>
         <option value="ellipse">Ellipse</option>
         <option value="line">Line</option>
+      </select>
+      <select
+        className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/10"
+        value=""
+        onChange={(e) => {
+          const tpl = LAYOUTS.find((l) => l.id === e.target.value);
+          if (tpl) applyLayout(tpl.build());
+          e.target.value = '';
+        }}
+        title="Apply a collage layout"
+      >
+        <option value="">▦ Layout</option>
+        {LAYOUTS.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.label}
+          </option>
+        ))}
       </select>
       <input
         ref={fileRef}

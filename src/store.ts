@@ -9,6 +9,8 @@ import type {
   OverlayLayer,
   ShapeLayer,
   CanvasPreset,
+  Collage,
+  CollageCell,
 } from './types';
 import { NO_FILTERS } from './types';
 import { DEFAULT_PRESET } from './presets';
@@ -53,8 +55,16 @@ interface EditorState {
   /** Ephemeral UI modes (not part of undo history). */
   cropTargetId: string | null;
   editingTextId: string | null;
+  selectedCellId: string | null;
   setCropTarget: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
+  selectCell: (id: string | null) => void;
+
+  applyLayout: (collage: Collage) => void;
+  clearCollage: () => void;
+  updateCollage: (patch: Partial<Collage>) => void;
+  updateCell: (id: string, patch: Partial<CollageCell>) => void;
+  setSplit: (axis: 'x' | 'y', index: number, value: number) => void;
 
   /** Active project (for persistence). */
   projectId: string | null;
@@ -104,13 +114,50 @@ export const useEditor = create<EditorState>((set, get) => {
     future: [],
     cropTargetId: null,
     editingTextId: null,
+    selectedCellId: null,
     projectId: null,
     projectName: 'Untitled',
 
     setCropTarget: (id) => set({ cropTargetId: id }),
     setEditingText: (id) => set({ editingTextId: id }),
+    selectCell: (id) => set({ selectedCellId: id, selectedId: null }),
     setProjectMeta: (id, name) => set({ projectId: id, projectName: name }),
     setProjectName: (name) => set({ projectName: name }),
+
+    applyLayout: (collage) => {
+      commit((d) => {
+        d.collage = collage;
+      });
+      set({ selectedCellId: null });
+    },
+
+    clearCollage: () => {
+      commit((d) => {
+        d.collage = undefined;
+      });
+      set({ selectedCellId: null });
+    },
+
+    updateCollage: (patch) =>
+      commit((d) => {
+        if (d.collage) Object.assign(d.collage, patch);
+      }),
+
+    updateCell: (id, patch) =>
+      commit((d) => {
+        const cell = d.collage?.cells.find((c) => c.id === id);
+        if (cell) Object.assign(cell, patch);
+      }),
+
+    setSplit: (axis, index, value) =>
+      commit((d) => {
+        if (!d.collage) return;
+        const splits = axis === 'x' ? d.collage.splitsX : d.collage.splitsY;
+        // Clamp between neighbouring dividers (with a small margin).
+        const lo = (splits[index - 1] ?? 0) + 0.05;
+        const hi = (splits[index + 1] ?? 1) - 0.05;
+        splits[index] = Math.min(Math.max(value, lo), hi);
+      }),
 
     setPreset: (preset) =>
       commit((d) => {
@@ -129,7 +176,7 @@ export const useEditor = create<EditorState>((set, get) => {
         d.background = color;
       }),
 
-    select: (id) => set({ selectedId: id }),
+    select: (id) => set({ selectedId: id, selectedCellId: null }),
 
     loadDesign: (design) =>
       set({ design, selectedId: null, past: [], future: [] }),
