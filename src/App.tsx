@@ -3,12 +3,14 @@ import { Toolbar } from './components/Toolbar';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { CanvasStage } from './canvas/CanvasStage';
 import { useShortcuts } from './useShortcuts';
+import { usePersistence } from './usePersistence';
 import { loadFonts } from './fonts';
 import { useEditor } from './store';
 import { addImageAsset } from './assets';
 
 export default function App() {
   useShortcuts();
+  usePersistence();
   const addImageLayer = useEditor((s) => s.addImageLayer);
 
   useEffect(() => {

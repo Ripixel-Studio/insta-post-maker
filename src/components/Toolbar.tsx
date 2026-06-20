@@ -3,6 +3,7 @@ import { useEditor } from '../store';
 import { PRESETS } from '../presets';
 import { addImageAsset } from '../assets';
 import { exportDesign, downloadBlob, type ExportFormat } from '../export';
+import { ProjectsMenu } from './ProjectsMenu';
 
 function btn(active = false) {
   return [
@@ -65,9 +66,13 @@ export function Toolbar() {
 
   return (
     <header className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#14161b] px-4 py-2">
-      <span className="mr-2 text-sm font-semibold tracking-tight text-violet-300">
+      <span className="mr-1 text-sm font-semibold tracking-tight text-violet-300">
         Insta Post Maker
       </span>
+
+      <ProjectsMenu />
+
+      <div className="mx-1 h-6 w-px bg-white/10" />
 
       {/* Canvas presets */}
       <div className="flex items-center gap-1">

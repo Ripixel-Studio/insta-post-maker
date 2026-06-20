@@ -1,9 +1,10 @@
 /**
- * In-memory asset registry. Uploaded images are kept as object URLs keyed by
- * an assetId that layers reference. Everything stays client-side — nothing is
- * uploaded anywhere. (IndexedDB persistence is a later step; the API here is
- * deliberately small so we can swap the backing store without touching layers.)
+ * In-memory asset registry backed by IndexedDB. Uploaded images are kept as
+ * object URLs (for fast canvas rendering) and their blobs are persisted so
+ * projects survive a reload. Everything stays client-side.
  */
+
+import { putAsset, getAllAssets } from './persistence';
 
 interface Asset {
   id: string;
@@ -17,30 +18,39 @@ const assets = new Map<string, Asset>();
 let counter = 0;
 function nextId(prefix: string) {
   counter += 1;
-  return `${prefix}_${counter}_${performance.now().toString(36)}`;
+  return `${prefix}_${counter}_${performance.now().toString(36).replace('.', '')}`;
 }
 
-/** Load a File into the registry, returning the asset id and natural size. */
-export function addImageAsset(file: File): Promise<Asset> {
+/** Decode a blob to get its natural dimensions. */
+function probe(url: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => {
-      const asset: Asset = {
-        id: nextId('asset'),
-        url,
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-      };
-      assets.set(asset.id, asset);
-      resolve(asset);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Could not decode image'));
-    };
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error('Could not decode image'));
     img.src = url;
   });
+}
+
+/** Load a File into the registry + persist its blob. Returns the asset. */
+export async function addImageAsset(file: File): Promise<Asset> {
+  const url = URL.createObjectURL(file);
+  const { width, height } = await probe(url);
+  const asset: Asset = { id: nextId('asset'), url, width, height };
+  assets.set(asset.id, asset);
+  // Persist the original blob (fire-and-forget; rendering uses the object URL).
+  void putAsset({ id: asset.id, blob: file, width, height });
+  return asset;
+}
+
+/** Recreate in-memory object URLs for every persisted asset (call at startup
+ * before loading a saved design that references them). */
+export async function hydrateAssets(): Promise<void> {
+  const stored = await getAllAssets();
+  for (const s of stored) {
+    if (assets.has(s.id)) continue;
+    const url = URL.createObjectURL(s.blob);
+    assets.set(s.id, { id: s.id, url, width: s.width, height: s.height });
+  }
 }
 
 export function getAsset(id: string): Asset | undefined {

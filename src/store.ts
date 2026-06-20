@@ -56,6 +56,12 @@ interface EditorState {
   setCropTarget: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
 
+  /** Active project (for persistence). */
+  projectId: string | null;
+  projectName: string;
+  setProjectMeta: (id: string, name: string) => void;
+  setProjectName: (name: string) => void;
+
   setPreset: (preset: CanvasPreset) => void;
   setCanvasSize: (width: number, height: number) => void;
   setBackground: (color: string) => void;
@@ -98,9 +104,13 @@ export const useEditor = create<EditorState>((set, get) => {
     future: [],
     cropTargetId: null,
     editingTextId: null,
+    projectId: null,
+    projectName: 'Untitled',
 
     setCropTarget: (id) => set({ cropTargetId: id }),
     setEditingText: (id) => set({ editingTextId: id }),
+    setProjectMeta: (id, name) => set({ projectId: id, projectName: name }),
+    setProjectName: (name) => set({ projectName: name }),
 
     setPreset: (preset) =>
       commit((d) => {
