@@ -1,9 +1,10 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useEditor } from '../store';
 import { FONTS, uploadFont } from '../fonts';
 import { FILTER_PRESETS } from '../filters';
 import { PRESETS } from '../presets';
 import { addImageAsset } from '../assets';
+import { cutoutAsset } from '../bgRemoval';
 import { ColorField } from './ColorField';
 import type {
   Layer,
@@ -176,9 +177,23 @@ function CommonProps({ layer }: { layer: Layer }) {
 function ImageProps({ layer }: { layer: ImageLayer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
   const setCropTarget = useEditor((s) => s.setCropTarget);
+  const [bgProgress, setBgProgress] = useState<number | null>(null);
   const f = layer.filters;
   const setFilter = (patch: Partial<ImageLayer['filters']>) =>
     updateLayer(layer.id, { filters: { ...f, ...patch } });
+
+  async function removeBg() {
+    setBgProgress(0);
+    try {
+      const newId = await cutoutAsset(layer.assetId, (r) => setBgProgress(r));
+      if (newId) updateLayer(layer.id, { assetId: newId });
+    } catch (err) {
+      console.error(err);
+      alert('Background removal failed. It needs a connection the first time.');
+    } finally {
+      setBgProgress(null);
+    }
+  }
 
   return (
     <>
@@ -200,6 +215,18 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
             </button>
           )}
         </div>
+      </Field>
+
+      <Field label="Background">
+        <button
+          className="w-full rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10 disabled:opacity-60"
+          onClick={removeBg}
+          disabled={bgProgress !== null}
+        >
+          {bgProgress !== null
+            ? `Removing… ${Math.round(bgProgress * 100)}%`
+            : '🪄 Remove background'}
+        </button>
       </Field>
 
       <Field label="Filter preset">

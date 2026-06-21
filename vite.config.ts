@@ -12,6 +12,10 @@ export default defineConfig({
       // Cache the app shell and Google Fonts so the editor works offline.
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // The background-removal ONNX runtime is a large, on-demand chunk; keep
+        // it out of the precache so the installable app stays lean. It loads
+        // lazily (and fetches its model from a CDN) only when first used.
+        globIgnores: ['**/ort*.js'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
