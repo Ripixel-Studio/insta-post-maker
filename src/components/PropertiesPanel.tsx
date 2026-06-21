@@ -5,7 +5,9 @@ import { FILTER_PRESETS } from '../filters';
 import { PRESETS } from '../presets';
 import { addImageAsset } from '../assets';
 import { cutoutAsset } from '../bgRemoval';
+import { bakeOutline } from '../sticker';
 import { ColorField } from './ColorField';
+import type { MaskShape } from '../types';
 import type {
   Layer,
   ImageLayer,
@@ -176,9 +178,12 @@ function CommonProps({ layer }: { layer: Layer }) {
 
 function ImageProps({ layer }: { layer: ImageLayer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
+  const addImageLayer = useEditor((s) => s.addImageLayer);
   const setCropTarget = useEditor((s) => s.setCropTarget);
   const [bgProgress, setBgProgress] = useState<number | null>(null);
+  const [stickerBusy, setStickerBusy] = useState(false);
   const f = layer.filters;
+  const isSticker = !!layer.baseAssetId;
   const setFilter = (patch: Partial<ImageLayer['filters']>) =>
     updateLayer(layer.id, { filters: { ...f, ...patch } });
 
@@ -194,6 +199,44 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
       setBgProgress(null);
     }
   }
+
+  // Lift the subject out as a new sticker layer you can place over anything.
+  async function makeSticker() {
+    setBgProgress(0);
+    try {
+      const cutId = await cutoutAsset(layer.assetId, (r) => setBgProgress(r));
+      if (cutId) {
+        const newLayerId = addImageLayer(cutId);
+        updateLayer(newLayerId, {
+          name: 'Sticker',
+          baseAssetId: cutId,
+          outline: { enabled: false, color: '#ffffff', width: 16 },
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Cutout failed. It needs a connection the first time.');
+    } finally {
+      setBgProgress(null);
+    }
+  }
+
+  async function setOutline(next: { enabled: boolean; color: string; width: number }) {
+    if (!layer.baseAssetId) return;
+    setStickerBusy(true);
+    try {
+      if (!next.enabled) {
+        updateLayer(layer.id, { assetId: layer.baseAssetId, outline: next });
+        return;
+      }
+      const baked = await bakeOutline(layer.baseAssetId, next.color, next.width);
+      if (baked) updateLayer(layer.id, { assetId: baked, outline: next });
+    } finally {
+      setStickerBusy(false);
+    }
+  }
+
+  const outline = layer.outline ?? { enabled: false, color: '#ffffff', width: 16 };
 
   return (
     <>
@@ -217,16 +260,64 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
         </div>
       </Field>
 
-      <Field label="Background">
-        <button
-          className="w-full rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10 disabled:opacity-60"
-          onClick={removeBg}
-          disabled={bgProgress !== null}
-        >
-          {bgProgress !== null
-            ? `Removing… ${Math.round(bgProgress * 100)}%`
-            : '🪄 Remove background'}
-        </button>
+      <Field label="Cut out subject">
+        <div className="flex gap-1">
+          <button
+            className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10 disabled:opacity-60"
+            onClick={makeSticker}
+            disabled={bgProgress !== null}
+          >
+            {bgProgress !== null ? `Working… ${Math.round(bgProgress * 100)}%` : '🩹 Make sticker'}
+          </button>
+          <button
+            className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10 disabled:opacity-60"
+            onClick={removeBg}
+            disabled={bgProgress !== null}
+            title="Remove the background in place"
+          >
+            🪄 Remove bg
+          </button>
+        </div>
+      </Field>
+
+      {isSticker && (
+        <>
+          <div className="mb-2 mt-1 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Sticker outline
+            </span>
+            <input
+              type="checkbox"
+              className="accent-violet-500"
+              checked={outline.enabled}
+              disabled={stickerBusy}
+              onChange={(e) => setOutline({ ...outline, enabled: e.target.checked })}
+            />
+          </div>
+          {outline.enabled && (
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Field label="Color">
+                  <ColorField value={outline.color} onChange={(c) => setOutline({ ...outline, color: c })} />
+                </Field>
+              </div>
+              <Field label="Width">
+                <input type="number" className={inputCls} value={outline.width}
+                  onChange={(e) => setOutline({ ...outline, width: Math.max(1, Number(e.target.value)) })} />
+              </Field>
+            </div>
+          )}
+          {stickerBusy && <p className="text-xs text-zinc-500">Baking outline…</p>}
+        </>
+      )}
+
+      <Field label="Mask shape">
+        <select className={inputCls} value={layer.mask ?? 'none'}
+          onChange={(e) => updateLayer(layer.id, { mask: e.target.value as MaskShape })}>
+          {(['none', 'circle', 'rounded', 'triangle', 'star', 'heart'] as MaskShape[]).map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
       </Field>
 
       <Field label="Filter preset">

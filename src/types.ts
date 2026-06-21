@@ -53,12 +53,33 @@ export interface CropRect {
   height: number;
 }
 
+/** Shape an image can be masked to. */
+export type MaskShape =
+  | 'none'
+  | 'circle'
+  | 'rounded'
+  | 'triangle'
+  | 'star'
+  | 'heart';
+
+/** Sticker outline baked around a subject cutout. */
+export interface StickerOutline {
+  enabled: boolean;
+  color: string;
+  width: number;
+}
+
 export interface ImageLayer extends BaseLayer {
   type: 'image';
   /** Key into the asset store (IndexedDB / in-memory object URL cache). */
   assetId: string;
   filters: ImageFilters;
   crop?: CropRect;
+  mask?: MaskShape;
+  /** Present when this layer is a subject cutout ("sticker"). Holds the clean
+   * cutout asset so the outline can be re-baked. */
+  baseAssetId?: string;
+  outline?: StickerOutline;
 }
 
 export interface TextShadow {

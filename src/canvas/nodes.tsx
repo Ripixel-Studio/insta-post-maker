@@ -104,6 +104,61 @@ function filtersActive(f: ImageFilters) {
   return f.brightness !== 0 || f.contrast !== 0 || f.saturation !== 0 || f.blur > 0;
 }
 
+/** Draw a mask path in the box's local coordinates (0,0 → w,h). */
+function maskPath(ctx: Konva.Context, w: number, h: number, shape: string) {
+  ctx.beginPath();
+  switch (shape) {
+    case 'circle':
+      ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      break;
+    case 'rounded': {
+      const r = Math.min(w, h) * 0.18;
+      ctx.moveTo(r, 0);
+      ctx.arcTo(w, 0, w, h, r);
+      ctx.arcTo(w, h, 0, h, r);
+      ctx.arcTo(0, h, 0, 0, r);
+      ctx.arcTo(0, 0, w, 0, r);
+      break;
+    }
+    case 'triangle':
+      ctx.moveTo(w / 2, 0);
+      ctx.lineTo(w, h);
+      ctx.lineTo(0, h);
+      break;
+    case 'star': {
+      const cx = w / 2;
+      const cy = h / 2;
+      const outer = Math.min(w, h) / 2;
+      const inner = outer * 0.45;
+      for (let i = 0; i < 10; i++) {
+        const rad = i % 2 === 0 ? outer : inner;
+        const a = (Math.PI / 5) * i - Math.PI / 2;
+        const px = cx + Math.cos(a) * rad * (w / Math.min(w, h));
+        const py = cy + Math.sin(a) * rad * (h / Math.min(w, h));
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      break;
+    }
+    case 'heart': {
+      // Parametric heart scaled into the box.
+      for (let i = 0; i <= 60; i++) {
+        const t = (i / 60) * Math.PI * 2;
+        const hx = 16 * Math.sin(t) ** 3;
+        const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        const px = w / 2 + (hx / 32) * w;
+        const py = h / 2 - (hy / 32) * h;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      break;
+    }
+    default:
+      ctx.rect(0, 0, w, h);
+  }
+  ctx.closePath();
+}
+
 export function ImageNode({ layer, isSelected, onSelect, onChange }: NodeProps) {
   const img = layer as ImageLayer;
   const asset = getAsset(img.assetId);
@@ -151,19 +206,41 @@ export function ImageNode({ layer, isSelected, onSelect, onChange }: NodeProps) 
     crop?.height,
   ]);
 
+  const imageProps = {
+    image,
+    width: img.width,
+    height: img.height,
+    ...cropProps,
+    filters: buildFilters(img.filters),
+    brightness: img.filters.brightness,
+    contrast: img.filters.contrast,
+    saturation: img.filters.saturation,
+    blurRadius: img.filters.blur,
+  };
+
+  const maskActive = img.mask && img.mask !== 'none';
+  if (maskActive) {
+    // Clip the image to a mask shape via a wrapping group (which carries the
+    // id, transform and interaction handlers).
+    return (
+      <Group
+        {...centeredProps(layer)}
+        clipFunc={(ctx) => maskPath(ctx as unknown as Konva.Context, img.width, img.height, img.mask!)}
+        onMouseDown={onSelect}
+        onTap={onSelect}
+        onDragEnd={onDragEnd}
+        onTransformEnd={onTransformEnd}
+      >
+        <KonvaImage ref={ref} {...imageProps} x={0} y={0} />
+      </Group>
+    );
+  }
+
   return (
     <KonvaImage
       ref={ref}
+      {...imageProps}
       {...centeredProps(layer)}
-      image={image}
-      width={img.width}
-      height={img.height}
-      {...cropProps}
-      filters={buildFilters(img.filters)}
-      brightness={img.filters.brightness}
-      contrast={img.filters.contrast}
-      saturation={img.filters.saturation}
-      blurRadius={img.filters.blur}
       shadowEnabled={isSelected ? false : undefined}
       onMouseDown={onSelect}
       onTap={onSelect}
