@@ -19,6 +19,10 @@ Working today:
 - **Image crop** editor (trim-style with aspect presets) and **adjustments**
   (brightness / contrast / saturation / blur) with one-tap filter presets
 - **In-browser background removal** (ONNX/WASM, no server)
+- **Sticker cutout**: lift the subject onto its own layer for stacking, with an
+  optional baked outline — the classic cutout-sticker look
+- **Shape masking**: mask an image to a circle, rounded rect, triangle, star or heart
+- **Emoji/sticker picker** for quick glyph stickers
 - **Rich text**: inline double-click editing, custom fonts (**+ upload your own**),
   drop shadow, background pill, line-height & letter-spacing
 - **Collage layouts**: grid templates with drag-to-resize unequal cells, each
@@ -26,16 +30,18 @@ Working today:
 - **Magic resize**: reflow a whole design between formats
 - **Templates**: built-in starters + save/apply your own
 - **Snapping** + smart alignment guides; per-layer **blend mode**, lock, opacity
-- **Eyedropper** + recent-colour palette
+- **Eyedropper** + recent colours + a persisted **brand palette**
 - Layer panel: reorder, show/hide, duplicate, delete
 - Undo/redo, keyboard shortcuts (with a `?` cheatsheet), nudging
 - **Projects**: IndexedDB persistence, auto-save, new/open/rename/delete
 - **Export** to PNG/JPEG at true resolution (@1x / @2x), **carousel split** into
-  N seamless slides, + **Web Share** on mobile
+  N seamless slides, an **animated** Ken Burns clip (MP4 where supported, else
+  WebM), + **Web Share** on mobile
 - Installable PWA, works offline
 
-Deferred (later, see PLAN.md): stickers/emoji, masking with arbitrary shapes,
-brand palettes, animated/MP4 export.
+The full PLAN.md feature set is implemented — only cloud deployment is left
+unrun (intentionally running locally for now). Possible future polish:
+free-form mask drawing, keyframe animation, true MP4 everywhere.
 
 ## Tech stack
 
