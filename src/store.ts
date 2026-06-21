@@ -109,11 +109,17 @@ interface EditorState {
   addCustomFont: (family: string) => void;
   recentColors: string[];
   pushRecentColor: (color: string) => void;
+  /** Persisted brand palette. */
+  brandColors: string[];
+  setBrandColors: (colors: string[]) => void;
+  addBrandColor: (color: string) => void;
+  removeBrandColor: (color: string) => void;
   select: (id: string | null) => void;
   loadDesign: (design: Design) => void;
 
   addImageLayer: (assetId: string) => string;
   addTextLayer: () => void;
+  addEmoji: (emoji: string) => void;
   addOverlayLayer: () => void;
   addShapeLayer: (shape: ShapeLayer['shape']) => void;
 
@@ -153,6 +159,15 @@ export const useEditor = create<EditorState>((set, get) => {
     projectName: 'Untitled',
     customFonts: [],
     recentColors: [],
+    brandColors: [],
+
+    setBrandColors: (colors) => set({ brandColors: colors }),
+    addBrandColor: (color) =>
+      set((s) => ({
+        brandColors: s.brandColors.includes(color) ? s.brandColors : [...s.brandColors, color],
+      })),
+    removeBrandColor: (color) =>
+      set((s) => ({ brandColors: s.brandColors.filter((c) => c !== color) })),
 
     addCustomFont: (family) =>
       set((s) => ({
@@ -307,6 +322,32 @@ export const useEditor = create<EditorState>((set, get) => {
           cornerRadius: 8,
           padding: 12,
         },
+      };
+      commit((d) => void d.layers.push(layer));
+      set({ selectedId: layer.id });
+    },
+
+    addEmoji: (emoji) => {
+      const { design } = get();
+      const size = design.width * 0.3;
+      const layer: TextLayer = {
+        ...baseLayer('text', `Emoji ${emoji}`, {
+          x: (design.width - size) / 2,
+          y: (design.height - size) / 2,
+          width: size,
+          height: size,
+        }),
+        type: 'text',
+        text: emoji,
+        fontFamily: 'Inter',
+        fontSize: Math.round(size * 0.8),
+        fontStyle: 'normal',
+        fill: '#ffffff',
+        align: 'center',
+        lineHeight: 1,
+        letterSpacing: 0,
+        shadow: { enabled: false, color: 'rgba(0,0,0,0.6)', blur: 8, offsetX: 0, offsetY: 2 },
+        background: { enabled: false, color: 'rgba(0,0,0,0.5)', cornerRadius: 8, padding: 12 },
       };
       commit((d) => void d.layers.push(layer));
       set({ selectedId: layer.id });

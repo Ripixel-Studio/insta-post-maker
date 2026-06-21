@@ -12,6 +12,7 @@ import {
 } from '../export';
 import { ProjectsMenu } from './ProjectsMenu';
 import { TemplatesMenu } from './TemplatesMenu';
+import { EmojiPicker } from './EmojiPicker';
 import { HelpOverlay } from './HelpOverlay';
 import { LAYOUTS } from '../collage';
 
@@ -138,6 +139,7 @@ export function Toolbar() {
       <button className={btn()} onClick={addTextLayer}>
         + Text
       </button>
+      <EmojiPicker />
       <button className={btn()} onClick={addOverlayLayer}>
         + Gradient
       </button>

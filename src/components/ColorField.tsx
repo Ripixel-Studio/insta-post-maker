@@ -23,6 +23,9 @@ interface Props {
 export function ColorField({ value, onChange }: Props) {
   const recentColors = useEditor((s) => s.recentColors);
   const pushRecentColor = useEditor((s) => s.pushRecentColor);
+  const brandColors = useEditor((s) => s.brandColors);
+  const addBrandColor = useEditor((s) => s.addBrandColor);
+  const removeBrandColor = useEditor((s) => s.removeBrandColor);
 
   const pick = (color: string) => {
     onChange(color);
@@ -58,7 +61,33 @@ export function ColorField({ value, onChange }: Props) {
             💧
           </button>
         )}
+        <button
+          type="button"
+          className="h-9 rounded-md bg-white/5 px-2 text-sm hover:bg-white/10"
+          title="Save to brand palette"
+          onClick={() => addBrandColor(value)}
+        >
+          ★
+        </button>
       </div>
+
+      {brandColors.length > 0 && (
+        <div className="mt-1.5">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-500">Brand</span>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {brandColors.map((c) => (
+              <button
+                key={c}
+                className="group relative h-5 w-5 rounded border border-white/15"
+                style={{ background: c }}
+                title={`${c} — click to use, shift-click to remove`}
+                onClick={(e) => (e.shiftKey ? removeBrandColor(c) : pick(c))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {recentColors.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {recentColors.map((c) => (

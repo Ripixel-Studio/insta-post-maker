@@ -27,9 +27,17 @@ export function usePersistence() {
     (async () => {
       await hydrateAssets();
       const fontFamilies = await hydrateFonts();
+      const brandJson = await getMeta('brandColors');
       if (!cancelled) {
-        const { addCustomFont } = useEditor.getState();
+        const { addCustomFont, setBrandColors } = useEditor.getState();
         fontFamilies.forEach(addCustomFont);
+        if (brandJson) {
+          try {
+            setBrandColors(JSON.parse(brandJson));
+          } catch {
+            /* ignore malformed */
+          }
+        }
       }
       const activeId = await getMeta(ACTIVE_KEY);
       let project = activeId ? await getProject(activeId) : undefined;
@@ -79,5 +87,15 @@ export function usePersistence() {
       clearTimeout(timer);
       unsub();
     };
+  }, []);
+
+  // --- Persist the brand palette whenever it changes ---
+  useEffect(() => {
+    const unsub = useEditor.subscribe((state, prev) => {
+      if (!loadedRef.current) return;
+      if (state.brandColors === prev.brandColors) return;
+      void setMeta('brandColors', JSON.stringify(state.brandColors));
+    });
+    return unsub;
   }, []);
 }
