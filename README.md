@@ -8,21 +8,29 @@ entirely in the browser (and offline, as a PWA).
 See [PLAN.md](PLAN.md) for the full product/architecture plan and roadmap, and
 [DEPLOY.md](DEPLOY.md) for Firebase Hosting + CircleCI deployment.
 
-## Status — baseline (roadmap step 1)
+## Status — MVP complete (everything except cloud deployment)
 
 Working today:
 
-- Canvas presets: Story (1080×1920), Square, Portrait (4:5), Landscape
-- Add **images** (drag-drop, file picker), **text** (Google-CDN fonts), and
-  **black→transparent gradient overlays** for text legibility
-- Free transform (move / scale / rotate) via on-canvas handles
-- Layer panel: reorder, show/hide, delete; per-layer opacity
-- Undo/redo, keyboard nudging, delete, deselect
-- **Export** to PNG/JPEG at true resolution (@1x / @2x)
+- Canvas presets (Story / Square / Portrait / Landscape) **+ custom size**
+- Add **images** (drag-drop, file picker, **clipboard paste**), **text**
+  (Google-CDN fonts), **gradient overlays**, and **shapes** (rect/ellipse/line)
+- Free transform (move / scale / rotate / **flip**) about the centre
+- **Image crop** editor (trim-style with aspect presets) and **adjustments**
+  (brightness / contrast / saturation / blur) with one-tap filter presets
+- **Rich text**: inline double-click editing, custom fonts, drop shadow,
+  background pill, line-height & letter-spacing
+- **Collage layouts**: grid templates with drag-to-resize unequal cells, each
+  cell cover-fitting a photo with zoom + drag-to-pan
+- **Snapping** + smart alignment guides; per-layer **blend mode**, lock, opacity
+- Layer panel: reorder, show/hide, duplicate, delete
+- Undo/redo, keyboard shortcuts (with a `?` cheatsheet), nudging
+- **Projects**: IndexedDB persistence, auto-save, new/open/rename/delete
+- **Export** to PNG/JPEG at true resolution (@1x / @2x) + **Web Share** on mobile
 - Installable PWA, works offline
 
-Next up (see roadmap in PLAN.md): frame/mask crop, filters/adjustments,
-collage layouts, IndexedDB project persistence, custom font upload.
+Deferred (v2, see PLAN.md): in-browser background removal, magic resize,
+templates gallery, custom font upload, carousel split, animated export.
 
 ## Tech stack
 
@@ -46,8 +54,12 @@ npm run lint     # eslint
 ## Architecture (quick map)
 
 - `src/types.ts` — the serializable **document model** (single source of truth)
-- `src/store.ts` — zustand store + undo/redo history
-- `src/canvas/` — the Konva rendering engine (`CanvasStage`, layer `nodes`)
-- `src/export.ts` — full-resolution rasterisation independent of display scale
-- `src/components/` — toolbar and properties/layers panel
-- `src/fonts.ts` — curated Google-CDN font set
+- `src/store.ts` — zustand store + undo/redo history + ephemeral UI state
+- `src/canvas/` — the Konva engine: `CanvasStage`, layer `nodes`, `CropOverlay`,
+  `CollageView`, snapping `guides`
+- `src/export.ts` — full-resolution rasterisation + Web Share, independent of
+  the on-screen display scale
+- `src/persistence.ts` / `src/usePersistence.ts` — Dexie/IndexedDB projects + assets
+- `src/collage.ts` — collage templates and cell geometry
+- `src/filters.ts` — adjustment presets; `src/fonts.ts` — Google-CDN font set
+- `src/components/` — toolbar, properties/layers panel, projects menu, help

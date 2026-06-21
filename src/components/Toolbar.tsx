@@ -2,8 +2,15 @@ import { useRef, useState } from 'react';
 import { useEditor } from '../store';
 import { PRESETS } from '../presets';
 import { addImageAsset } from '../assets';
-import { exportDesign, downloadBlob, type ExportFormat } from '../export';
+import {
+  exportDesign,
+  downloadBlob,
+  shareBlob,
+  canShareFiles,
+  type ExportFormat,
+} from '../export';
 import { ProjectsMenu } from './ProjectsMenu';
+import { HelpOverlay } from './HelpOverlay';
 import { LAYOUTS } from '../collage';
 
 function btn(active = false) {
@@ -50,14 +57,33 @@ export function Toolbar() {
     }
   }
 
+  async function build() {
+    const blob = await exportDesign(design, { format, multiplier });
+    const name = `${activePreset?.id ?? 'design'}-${design.width}x${design.height}${
+      multiplier === 2 ? '@2x' : ''
+    }.${format === 'png' ? 'png' : 'jpg'}`;
+    return { blob, name };
+  }
+
   async function handleExport() {
     setBusy(true);
     try {
-      const blob = await exportDesign(design, { format, multiplier });
-      const name = `${activePreset?.id ?? 'design'}-${design.width}x${design.height}${
-        multiplier === 2 ? '@2x' : ''
-      }.${format === 'png' ? 'png' : 'jpg'}`;
+      const { blob, name } = await build();
       downloadBlob(blob, name);
+    } catch (err) {
+      console.error(err);
+      alert((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleShare() {
+    setBusy(true);
+    try {
+      const { blob, name } = await build();
+      const shared = await shareBlob(blob, name);
+      if (!shared) downloadBlob(blob, name);
     } catch (err) {
       console.error(err);
       alert((err as Error).message);
@@ -156,6 +182,7 @@ export function Toolbar() {
 
       {/* Export controls pushed to the right */}
       <div className="ml-auto flex items-center gap-2">
+        <HelpOverlay />
         <select
           className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200"
           value={format}
@@ -177,8 +204,18 @@ export function Toolbar() {
           onClick={handleExport}
           disabled={busy}
         >
-          {busy ? 'Exporting…' : 'Export'}
+          {busy ? 'Working…' : 'Export'}
         </button>
+        {canShareFiles() && (
+          <button
+            className="rounded-md bg-white/5 px-3 py-1.5 text-sm font-semibold text-zinc-100 hover:bg-white/10 disabled:opacity-50"
+            onClick={handleShare}
+            disabled={busy}
+            title="Share the exported image (e.g. to Instagram)"
+          >
+            Share
+          </button>
+        )}
       </div>
     </header>
   );

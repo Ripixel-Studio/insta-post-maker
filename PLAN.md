@@ -121,12 +121,16 @@ Layer = Image | Text | Shape | Overlay
 
 ## 9. Phased roadmap
 
-1. **Scaffold + engine**: Vite/React/Konva, document model, presets, display-scaling,
-   export pipeline. *(Baseline: blank Story → export a 1080×1920 PNG.)* ← current
-2. **Images**: import, transform, frame/mask crop, persistence.
-3. **Text + fonts** (incl. custom upload).
-4. **Overlays/gradients + filters** (legibility scrims).
-5. **Layouts/collage** with resizable unequal cells.
-6. **Layers panel, undo/redo, snapping, shortcuts**.
-7. **PWA polish + share/export options**.
-8. **v2**: background removal, magic resize, templates.
+1. ✅ **Scaffold + engine**: Vite/React/Konva, document model, presets,
+   display-scaling, export pipeline.
+2. ✅ **Images**: import (drag/picker/paste), transform, crop, persistence.
+3. ✅ **Text + fonts**: inline editing, shadow, background pill, spacing.
+   *(Custom font upload deferred to v2.)*
+4. ✅ **Overlays/gradients + filters** (legibility scrims + adjustments/presets).
+5. ✅ **Layouts/collage** with resizable unequal cells.
+6. ✅ **Layers panel, undo/redo, snapping, shortcuts** (+ blend mode, lock, flip).
+7. ✅ **PWA + share/export options** (PNG/JPEG @1x/@2x, Web Share). Firebase/CircleCI
+   deploy config is in the repo but **deployment is intentionally not run yet**
+   (running locally for now).
+8. ⏳ **v2** (not started): background removal, magic resize, templates gallery,
+   custom font upload, carousel split, animated export.

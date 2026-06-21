@@ -17,6 +17,28 @@ export default function App() {
     loadFonts();
   }, []);
 
+  // Paste an image from the clipboard straight onto the canvas.
+  useEffect(() => {
+    async function onPaste(e: ClipboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) =>
+        i.type.startsWith('image/'),
+      );
+      const file = item?.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      try {
+        const asset = await addImageAsset(file);
+        addImageLayer(asset.id);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [addImageLayer]);
+
   // Drag-and-drop images anywhere onto the workspace.
   async function onDrop(e: React.DragEvent) {
     e.preventDefault();

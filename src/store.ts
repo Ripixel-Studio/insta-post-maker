@@ -16,6 +16,32 @@ import { NO_FILTERS } from './types';
 import { DEFAULT_PRESET } from './presets';
 import { nextId, getAsset } from './assets';
 
+/** Fill in any fields missing from an older/partial saved design so the
+ * renderer never hits `undefined` after a schema change. */
+export function normalizeDesign(input: Design): Design {
+  const layers = (input.layers ?? []).map((l): Layer => {
+    const base = { ...l, flipX: l.flipX ?? false, flipY: l.flipY ?? false } as Layer;
+    if (base.type === 'image') {
+      const img = base as ImageLayer;
+      return { ...img, filters: img.filters ?? { brightness: 0, contrast: 0, saturation: 0, blur: 0 } };
+    }
+    if (base.type === 'text') {
+      const t = base as TextLayer;
+      return {
+        ...t,
+        shadow: t.shadow ?? { enabled: false, color: 'rgba(0,0,0,0.6)', blur: 8, offsetX: 0, offsetY: 2 },
+        background: t.background ?? { enabled: false, color: 'rgba(0,0,0,0.5)', cornerRadius: 8, padding: 12 },
+      };
+    }
+    if (base.type === 'shape') {
+      const s = base as ShapeLayer;
+      return { ...s, stroke: s.stroke ?? '#ffffff', strokeWidth: s.strokeWidth ?? 0, cornerRadius: s.cornerRadius ?? 0 };
+    }
+    return base;
+  });
+  return { ...input, layers };
+}
+
 export function emptyDesign(preset: CanvasPreset): Design {
   return {
     width: preset.width,
@@ -179,7 +205,7 @@ export const useEditor = create<EditorState>((set, get) => {
     select: (id) => set({ selectedId: id, selectedCellId: null }),
 
     loadDesign: (design) =>
-      set({ design, selectedId: null, past: [], future: [] }),
+      set({ design: normalizeDesign(design), selectedId: null, past: [], future: [] }),
 
     addImageLayer: (assetId) => {
       const asset = getAsset(assetId);

@@ -59,6 +59,29 @@ export async function exportDesign(
   }
 }
 
+/** True if the browser can share image files (mobile Safari/Chrome, etc.). */
+export function canShareFiles(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    typeof navigator.canShare === 'function' &&
+    navigator.canShare({ files: [new File([], 'probe.png', { type: 'image/png' })] })
+  );
+}
+
+/** Share an exported blob via the Web Share API (e.g. straight to Instagram on
+ * mobile). Returns false if sharing isn't available or was cancelled. */
+export async function shareBlob(blob: Blob, filename: string): Promise<boolean> {
+  if (!canShareFiles()) return false;
+  const file = new File([blob], filename, { type: blob.type });
+  try {
+    await navigator.share({ files: [file], title: filename });
+    return true;
+  } catch {
+    // AbortError (user cancelled) or unsupported — treat as no-op.
+    return false;
+  }
+}
+
 /** Trigger a browser download of an exported blob. */
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
