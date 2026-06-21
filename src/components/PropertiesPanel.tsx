@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEditor } from '../store';
 import { FONTS, uploadFont } from '../fonts';
 import { FILTER_PRESETS } from '../filters';
@@ -675,7 +675,7 @@ function CanvasProps() {
 
 /* ------------------------------- Panel ------------------------------- */
 
-export function PropertiesPanel() {
+function PanelContent() {
   const selectedId = useEditor((s) => s.selectedId);
   const selectedCellId = useEditor((s) => s.selectedCellId);
   const design = useEditor((s) => s.design);
@@ -684,7 +684,7 @@ export function PropertiesPanel() {
   const layer = design.layers.find((l) => l.id === selectedId) ?? null;
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-white/10 bg-[#14161b] p-4">
+    <>
       {selectedCellId && <CellPanel cellId={selectedCellId} />}
 
       {!layer && !selectedCellId && (
@@ -716,6 +716,60 @@ export function PropertiesPanel() {
       <div className="mt-auto border-t border-white/10 pt-4">
         <LayersList />
       </div>
-    </aside>
+    </>
+  );
+}
+
+export function PropertiesPanel() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // On mobile, slide the sheet up automatically when the selection changes to a
+  // new layer/cell. Done via a store subscription (an event), not a render-time
+  // effect, so it only fires on real selection changes.
+  useEffect(() => {
+    return useEditor.subscribe((s, p) => {
+      const newLayer = s.selectedId && s.selectedId !== p.selectedId;
+      const newCell = s.selectedCellId && s.selectedCellId !== p.selectedCellId;
+      if (newLayer || newCell) setMobileOpen(true);
+    });
+  }, []);
+
+  return (
+    <>
+      {/* Desktop: fixed right sidebar */}
+      <aside className="hidden w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-white/10 bg-[#14161b] p-4 md:flex">
+        <PanelContent />
+      </aside>
+
+      {/* Mobile: floating button to open the edit sheet */}
+      {!mobileOpen && (
+        <button
+          className="fixed bottom-4 right-4 z-20 rounded-full bg-violet-500 px-5 py-3 text-sm font-semibold text-white shadow-2xl md:hidden"
+          onClick={() => setMobileOpen(true)}
+        >
+          Edit ⚙
+        </button>
+      )}
+
+      {/* Mobile: bottom sheet */}
+      <div
+        className={`fixed inset-x-0 bottom-0 z-30 flex max-h-[64vh] flex-col rounded-t-2xl border-t border-white/10 bg-[#14161b] shadow-2xl transition-transform duration-200 md:hidden ${
+          mobileOpen ? 'translate-y-0' : 'translate-y-full'
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
+          <span className="text-sm font-semibold text-zinc-200">Edit</span>
+          <button
+            className="rounded-md bg-white/5 px-3 py-1 text-sm text-zinc-100 hover:bg-white/10"
+            onClick={() => setMobileOpen(false)}
+          >
+            Done
+          </button>
+        </div>
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+          <PanelContent />
+        </div>
+      </div>
+    </>
   );
 }

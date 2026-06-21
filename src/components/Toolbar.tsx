@@ -14,6 +14,7 @@ import { exportMotion, canRecordVideo } from '../motion';
 import { ProjectsMenu } from './ProjectsMenu';
 import { TemplatesMenu } from './TemplatesMenu';
 import { EmojiPicker } from './EmojiPicker';
+import { AddMenu } from './AddMenu';
 import { HelpOverlay } from './HelpOverlay';
 import { LAYOUTS } from '../collage';
 
@@ -120,18 +121,18 @@ export function Toolbar() {
   }
 
   return (
-    <header className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#14161b] px-4 py-2">
-      <span className="mr-1 text-sm font-semibold tracking-tight text-violet-300">
+    <header className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#14161b] px-3 py-2">
+      <span className="mr-1 hidden text-sm font-semibold tracking-tight text-violet-300 sm:inline">
         Insta Post Maker
       </span>
 
       <ProjectsMenu />
       <TemplatesMenu />
 
-      <div className="mx-1 h-6 w-px bg-white/10" />
+      <div className="mx-1 hidden h-6 w-px bg-white/10 md:block" />
 
-      {/* Canvas presets */}
-      <div className="flex items-center gap-1">
+      {/* Canvas presets — desktop only (mobile uses Magic resize in the panel) */}
+      <div className="hidden items-center gap-1 md:flex">
         {PRESETS.map((p) => (
           <button
             key={p.id}
@@ -144,50 +145,53 @@ export function Toolbar() {
         ))}
       </div>
 
-      <div className="mx-1 h-6 w-px bg-white/10" />
+      <div className="mx-1 hidden h-6 w-px bg-white/10 md:block" />
 
-      {/* Add layers */}
-      <button className={btn()} onClick={() => fileRef.current?.click()}>
-        + Image
-      </button>
-      <button className={btn()} onClick={addTextLayer}>
-        + Text
-      </button>
+      {/* Add layers — inline on desktop, compact menu on mobile */}
+      <div className="hidden items-center gap-2 md:flex">
+        <button className={btn()} onClick={() => fileRef.current?.click()}>
+          + Image
+        </button>
+        <button className={btn()} onClick={addTextLayer}>
+          + Text
+        </button>
+        <button className={btn()} onClick={addOverlayLayer}>
+          + Gradient
+        </button>
+        <select
+          className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/10"
+          value=""
+          onChange={(e) => {
+            if (e.target.value) addShapeLayer(e.target.value as 'rect' | 'ellipse' | 'line');
+            e.target.value = '';
+          }}
+          title="Add a shape"
+        >
+          <option value="">+ Shape</option>
+          <option value="rect">Rectangle</option>
+          <option value="ellipse">Ellipse</option>
+          <option value="line">Line</option>
+        </select>
+        <select
+          className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/10"
+          value=""
+          onChange={(e) => {
+            const tpl = LAYOUTS.find((l) => l.id === e.target.value);
+            if (tpl) applyLayout(tpl.build());
+            e.target.value = '';
+          }}
+          title="Apply a collage layout"
+        >
+          <option value="">▦ Layout</option>
+          {LAYOUTS.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <AddMenu className="md:hidden" onAddImage={() => fileRef.current?.click()} />
       <EmojiPicker />
-      <button className={btn()} onClick={addOverlayLayer}>
-        + Gradient
-      </button>
-      <select
-        className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/10"
-        value=""
-        onChange={(e) => {
-          if (e.target.value) addShapeLayer(e.target.value as 'rect' | 'ellipse' | 'line');
-          e.target.value = '';
-        }}
-        title="Add a shape"
-      >
-        <option value="">+ Shape</option>
-        <option value="rect">Rectangle</option>
-        <option value="ellipse">Ellipse</option>
-        <option value="line">Line</option>
-      </select>
-      <select
-        className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/10"
-        value=""
-        onChange={(e) => {
-          const tpl = LAYOUTS.find((l) => l.id === e.target.value);
-          if (tpl) applyLayout(tpl.build());
-          e.target.value = '';
-        }}
-        title="Apply a collage layout"
-      >
-        <option value="">▦ Layout</option>
-        {LAYOUTS.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.label}
-          </option>
-        ))}
-      </select>
       <input
         ref={fileRef}
         type="file"
@@ -200,18 +204,20 @@ export function Toolbar() {
         }}
       />
 
-      <div className="mx-1 h-6 w-px bg-white/10" />
+      <div className="mx-1 hidden h-6 w-px bg-white/10 md:block" />
 
       <button className={btn()} onClick={undo} disabled={!canUndo} title="Undo (⌘Z)">
-        Undo
+        ↶
       </button>
       <button className={btn()} onClick={redo} disabled={!canRedo} title="Redo (⇧⌘Z)">
-        Redo
+        ↷
       </button>
 
       {/* Export controls pushed to the right */}
       <div className="ml-auto flex items-center gap-2">
-        <HelpOverlay />
+        <span className="hidden md:inline-flex">
+          <HelpOverlay />
+        </span>
         <select
           className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200"
           value={format}
@@ -221,7 +227,7 @@ export function Toolbar() {
           <option value="jpeg">JPEG</option>
         </select>
         <select
-          className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200"
+          className="hidden rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 sm:block"
           value={multiplier}
           onChange={(e) => setMultiplier(Number(e.target.value) as 1 | 2)}
         >
@@ -229,7 +235,7 @@ export function Toolbar() {
           <option value={2}>@2x</option>
         </select>
         <select
-          className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200"
+          className="hidden rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 sm:block"
           value={slides}
           onChange={(e) => setSlides(Number(e.target.value))}
           title="Split into N carousel slides"
@@ -248,7 +254,7 @@ export function Toolbar() {
         </button>
         {canRecordVideo() && (
           <button
-            className="rounded-md bg-white/5 px-3 py-1.5 text-sm font-semibold text-zinc-100 hover:bg-white/10 disabled:opacity-50"
+            className="hidden rounded-md bg-white/5 px-3 py-1.5 text-sm font-semibold text-zinc-100 hover:bg-white/10 disabled:opacity-50 md:inline-flex"
             onClick={handleAnimate}
             disabled={busy}
             title="Export a short Ken Burns motion clip (MP4/WebM)"

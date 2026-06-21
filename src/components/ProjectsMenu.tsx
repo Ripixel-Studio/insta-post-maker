@@ -57,7 +57,7 @@ export function ProjectsMenu() {
   return (
     <div className="relative flex items-center gap-2">
       <input
-        className="w-36 rounded-md border border-transparent bg-white/5 px-2 py-1 text-sm text-zinc-100 outline-none hover:border-white/10 focus:border-violet-400"
+        className="w-24 rounded-md border border-transparent bg-white/5 px-2 py-1 text-sm text-zinc-100 outline-none hover:border-white/10 focus:border-violet-400 sm:w-36"
         value={projectName}
         onChange={(e) => setProjectName(e.target.value)}
         title="Project name"
