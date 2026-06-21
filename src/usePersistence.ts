@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useEditor } from './store';
 import { hydrateAssets, nextId } from './assets';
+import { hydrateFonts } from './fonts';
 import {
   getMeta,
   setMeta,
@@ -24,6 +25,11 @@ export function usePersistence() {
     let cancelled = false;
     (async () => {
       await hydrateAssets();
+      const fontFamilies = await hydrateFonts();
+      if (!cancelled) {
+        const { addCustomFont } = useEditor.getState();
+        fontFamilies.forEach(addCustomFont);
+      }
       const activeId = await getMeta(ACTIVE_KEY);
       let project = activeId ? await getProject(activeId) : undefined;
       if (!project) {

@@ -100,7 +100,15 @@ interface EditorState {
 
   setPreset: (preset: CanvasPreset) => void;
   setCanvasSize: (width: number, height: number) => void;
+  /** Resize the canvas AND reflow every layer proportionally (magic resize). */
+  magicResize: (width: number, height: number) => void;
   setBackground: (color: string) => void;
+
+  /** App-level (non-design) state. */
+  customFonts: string[];
+  addCustomFont: (family: string) => void;
+  recentColors: string[];
+  pushRecentColor: (color: string) => void;
   select: (id: string | null) => void;
   loadDesign: (design: Design) => void;
 
@@ -143,6 +151,20 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedCellId: null,
     projectId: null,
     projectName: 'Untitled',
+    customFonts: [],
+    recentColors: [],
+
+    addCustomFont: (family) =>
+      set((s) => ({
+        customFonts: s.customFonts.includes(family)
+          ? s.customFonts
+          : [...s.customFonts, family],
+      })),
+
+    pushRecentColor: (color) =>
+      set((s) => ({
+        recentColors: [color, ...s.recentColors.filter((c) => c !== color)].slice(0, 12),
+      })),
 
     setCropTarget: (id) => set({ cropTargetId: id }),
     setEditingText: (id) => set({ editingTextId: id }),
@@ -195,6 +217,25 @@ export const useEditor = create<EditorState>((set, get) => {
       commit((d) => {
         d.width = Math.max(64, Math.round(width));
         d.height = Math.max(64, Math.round(height));
+      }),
+
+    magicResize: (width, height) =>
+      commit((d) => {
+        const nw = Math.max(64, Math.round(width));
+        const nh = Math.max(64, Math.round(height));
+        const sx = nw / d.width;
+        const sy = nh / d.height;
+        const sf = (sx + sy) / 2; // font/uniform scale
+        for (const l of d.layers) {
+          l.x *= sx;
+          l.y *= sy;
+          l.width *= sx;
+          l.height *= sy;
+          if (l.type === 'text') l.fontSize = Math.max(4, Math.round(l.fontSize * sf));
+        }
+        // Collage geometry is normalised, so it adapts automatically.
+        d.width = nw;
+        d.height = nh;
       }),
 
     setBackground: (color) =>

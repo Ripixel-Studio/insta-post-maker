@@ -1,8 +1,11 @@
 /**
  * Curated font set, loaded from the Google Fonts CDN. We inject a single
  * stylesheet link at startup and rely on `document.fonts.ready` before export
- * so text never rasterises in a fallback face.
+ * so text never rasterises in a fallback face. Users can also upload their own
+ * font files, which are registered via the FontFace API and persisted.
  */
+
+import { putFont, getAllFonts } from './persistence';
 
 export interface FontDef {
   family: string;
@@ -44,4 +47,41 @@ export function loadFonts() {
   link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
 
   document.head.append(pre1, pre2, link);
+}
+
+/** Register a font from raw bytes via the FontFace API. */
+async function registerFontData(family: string, data: ArrayBuffer): Promise<void> {
+  const face = new FontFace(family, data);
+  await face.load();
+  document.fonts.add(face);
+}
+
+/** Derive a usable family name from an uploaded file's name. */
+function familyFromFilename(name: string): string {
+  return name.replace(/\.(ttf|otf|woff2?|TTF|OTF|WOFF2?)$/, '').replace(/[_-]+/g, ' ').trim();
+}
+
+/** Upload a user font file: register it for immediate use and persist it.
+ * Returns the family name to add to the font list. */
+export async function uploadFont(file: File): Promise<string> {
+  const family = familyFromFilename(file.name) || `Custom ${Date.now()}`;
+  const buffer = await file.arrayBuffer();
+  await registerFontData(family, buffer);
+  void putFont({ family, blob: file });
+  return family;
+}
+
+/** Re-register every persisted user font at startup. Returns their families. */
+export async function hydrateFonts(): Promise<string[]> {
+  const stored = await getAllFonts();
+  const families: string[] = [];
+  for (const f of stored) {
+    try {
+      await registerFontData(f.family, await f.blob.arrayBuffer());
+      families.push(f.family);
+    } catch (err) {
+      console.error('Failed to load font', f.family, err);
+    }
+  }
+  return families;
 }

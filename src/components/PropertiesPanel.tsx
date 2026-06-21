@@ -1,9 +1,10 @@
 import { useRef } from 'react';
 import { useEditor } from '../store';
-import { FONTS } from '../fonts';
+import { FONTS, uploadFont } from '../fonts';
 import { FILTER_PRESETS } from '../filters';
 import { PRESETS } from '../presets';
 import { addImageAsset } from '../assets';
+import { ColorField } from './ColorField';
 import type {
   Layer,
   ImageLayer,
@@ -231,7 +232,22 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
 
 function TextProps({ layer }: { layer: TextLayer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
+  const customFonts = useEditor((s) => s.customFonts);
+  const addCustomFont = useEditor((s) => s.addCustomFont);
+  const fontFileRef = useRef<HTMLInputElement>(null);
   const patch = (p: Partial<TextLayer>) => updateLayer(layer.id, p);
+
+  async function onFontFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      const family = await uploadFont(file);
+      addCustomFont(family);
+      patch({ fontFamily: family });
+    } catch (err) {
+      console.error(err);
+      alert('Could not load that font file.');
+    }
+  }
 
   return (
     <>
@@ -240,10 +256,26 @@ function TextProps({ layer }: { layer: TextLayer }) {
           onChange={(e) => patch({ text: e.target.value })} />
       </Field>
       <Field label="Font">
-        <select className={inputCls} value={layer.fontFamily}
-          onChange={(e) => patch({ fontFamily: e.target.value })}>
-          {FONTS.map((ft) => <option key={ft.family} value={ft.family}>{ft.family}</option>)}
-        </select>
+        <div className="flex gap-1">
+          <select className={inputCls} value={layer.fontFamily}
+            onChange={(e) => patch({ fontFamily: e.target.value })}>
+            {FONTS.map((ft) => <option key={ft.family} value={ft.family}>{ft.family}</option>)}
+            {customFonts.length > 0 && (
+              <optgroup label="Your fonts">
+                {customFonts.map((f) => <option key={f} value={f}>{f}</option>)}
+              </optgroup>
+            )}
+          </select>
+          <button
+            className="rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+            title="Upload a font file (.ttf/.otf/.woff2)"
+            onClick={() => fontFileRef.current?.click()}
+          >
+            ⬆
+          </button>
+          <input ref={fontFileRef} type="file" accept=".ttf,.otf,.woff,.woff2,font/*" hidden
+            onChange={(e) => { void onFontFile(e.target.files?.[0]); e.target.value = ''; }} />
+        </div>
       </Field>
       <div className="flex gap-2">
         <Field label="Size">
@@ -251,8 +283,7 @@ function TextProps({ layer }: { layer: TextLayer }) {
             onChange={(e) => patch({ fontSize: Number(e.target.value) })} />
         </Field>
         <Field label="Color">
-          <input type="color" className="h-9 w-full rounded-md bg-white/5" value={layer.fill}
-            onChange={(e) => patch({ fill: e.target.value })} />
+          <ColorField value={layer.fill} onChange={(c) => patch({ fill: c })} />
         </Field>
       </div>
       <Field label="Align">
@@ -374,32 +405,28 @@ function ShapeProps({ layer }: { layer: ShapeLayer }) {
   return (
     <>
       {layer.shape !== 'line' && (
-        <div className="flex gap-2">
+        <>
           <Field label="Fill">
-            <input type="color" className="h-9 w-full rounded-md bg-white/5" value={layer.fill}
-              onChange={(e) => patch({ fill: e.target.value })} />
+            <ColorField value={layer.fill} onChange={(c) => patch({ fill: c })} />
           </Field>
           {layer.shape === 'rect' && (
-            <Field label="Radius">
+            <Field label="Corner radius">
               <input type="number" className={inputCls} value={layer.cornerRadius}
                 onChange={(e) => patch({ cornerRadius: Number(e.target.value) })} />
             </Field>
           )}
-        </div>
+        </>
       )}
-      <div className="flex gap-2">
-        <Field label={layer.shape === 'line' ? 'Color' : 'Stroke'}>
-          <input type="color" className="h-9 w-full rounded-md bg-white/5"
-            value={layer.shape === 'line' ? layer.fill : layer.stroke}
-            onChange={(e) =>
-              patch(layer.shape === 'line' ? { fill: e.target.value } : { stroke: e.target.value })
-            } />
-        </Field>
-        <Field label={layer.shape === 'line' ? 'Thickness' : 'Stroke width'}>
-          <input type="number" className={inputCls} value={layer.strokeWidth}
-            onChange={(e) => patch({ strokeWidth: Number(e.target.value) })} />
-        </Field>
-      </div>
+      <Field label={layer.shape === 'line' ? 'Color' : 'Stroke'}>
+        <ColorField
+          value={layer.shape === 'line' ? layer.fill : layer.stroke}
+          onChange={(c) => patch(layer.shape === 'line' ? { fill: c } : { stroke: c })}
+        />
+      </Field>
+      <Field label={layer.shape === 'line' ? 'Thickness' : 'Stroke width'}>
+        <input type="number" className={inputCls} value={layer.strokeWidth}
+          onChange={(e) => patch({ strokeWidth: Number(e.target.value) })} />
+      </Field>
     </>
   );
 }
@@ -486,6 +513,7 @@ function CanvasProps() {
   const design = useEditor((s) => s.design);
   const setBackground = useEditor((s) => s.setBackground);
   const setCanvasSize = useEditor((s) => s.setCanvasSize);
+  const magicResize = useEditor((s) => s.magicResize);
   const activePreset = PRESETS.find(
     (p) => p.width === design.width && p.height === design.height,
   );
@@ -493,8 +521,7 @@ function CanvasProps() {
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Canvas</h3>
       <Field label="Background">
-        <input type="color" className="h-9 w-full rounded-md bg-white/5"
-          value={design.background} onChange={(e) => setBackground(e.target.value)} />
+        <ColorField value={design.background} onChange={setBackground} />
       </Field>
       <Field label="Size (px)">
         <div className="flex items-center gap-2">
@@ -503,6 +530,22 @@ function CanvasProps() {
           <span className="text-zinc-500">×</span>
           <input type="number" className={inputCls} value={design.height}
             onChange={(e) => setCanvasSize(design.width, Number(e.target.value))} />
+        </div>
+      </Field>
+      <Field label="Magic resize (reflow to)">
+        <div className="grid grid-cols-2 gap-1">
+          {PRESETS.map((p) => (
+            <button
+              key={p.id}
+              className={`rounded-md px-2 py-1.5 text-xs ${
+                activePreset?.id === p.id ? 'bg-violet-500 text-white' : 'bg-white/5 hover:bg-white/10'
+              }`}
+              onClick={() => magicResize(p.width, p.height)}
+              title={`${p.width}×${p.height}`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
       </Field>
       <p className="text-sm text-zinc-500">

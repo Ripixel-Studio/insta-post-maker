@@ -21,10 +21,16 @@ export interface StoredProject {
   updatedAt: number;
 }
 
+export interface StoredFont {
+  family: string;
+  blob: Blob;
+}
+
 class EditorDB extends Dexie {
   assets!: Table<StoredAsset, string>;
   projects!: Table<StoredProject, string>;
   meta!: Table<{ key: string; value: string }, string>;
+  fonts!: Table<StoredFont, string>;
 
   constructor() {
     super('insta-post-maker');
@@ -32,6 +38,13 @@ class EditorDB extends Dexie {
       assets: 'id',
       projects: 'id, updatedAt',
       meta: 'key',
+    });
+    // v2 adds a fonts table for user-uploaded typefaces.
+    this.version(2).stores({
+      assets: 'id',
+      projects: 'id, updatedAt',
+      meta: 'key',
+      fonts: 'family',
     });
   }
 }
@@ -65,6 +78,16 @@ export async function listProjects(): Promise<StoredProject[]> {
 
 export async function deleteProject(id: string): Promise<void> {
   await db.projects.delete(id);
+}
+
+/* --------------------------------- Fonts --------------------------------- */
+
+export async function putFont(font: StoredFont): Promise<void> {
+  await db.fonts.put(font);
+}
+
+export async function getAllFonts(): Promise<StoredFont[]> {
+  return db.fonts.toArray();
 }
 
 /* ---------------------------------- Meta ---------------------------------- */

@@ -24,7 +24,7 @@ function btn(active = false) {
 
 export function Toolbar() {
   const design = useEditor((s) => s.design);
-  const setPreset = useEditor((s) => s.setPreset);
+  const magicResize = useEditor((s) => s.magicResize);
   const addImageLayer = useEditor((s) => s.addImageLayer);
   const addTextLayer = useEditor((s) => s.addTextLayer);
   const addOverlayLayer = useEditor((s) => s.addOverlayLayer);
@@ -108,8 +108,8 @@ export function Toolbar() {
           <button
             key={p.id}
             className={btn(activePreset?.id === p.id)}
-            onClick={() => setPreset(p)}
-            title={`${p.width}×${p.height}`}
+            onClick={() => magicResize(p.width, p.height)}
+            title={`${p.width}×${p.height} — reflows your layers`}
           >
             {p.label}
           </button>
