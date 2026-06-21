@@ -12,6 +12,7 @@ export default function App() {
   useShortcuts();
   usePersistence();
   const addImageLayer = useEditor((s) => s.addImageLayer);
+  const sheetOpen = useEditor((s) => s.sheetOpen);
 
   useEffect(() => {
     loadFonts();
@@ -61,7 +62,13 @@ export default function App() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       >
-        <main className="min-w-0 flex-1 bg-[#0b0d10]">
+        {/* On mobile, reserve space for the bottom sheet so the canvas shrinks
+            to sit above it (no-op on desktop, where the sheet isn't used). */}
+        <main
+          className={`min-w-0 flex-1 bg-[#0b0d10] transition-[padding] duration-200 md:pb-0 ${
+            sheetOpen ? 'pb-[55vh]' : 'pb-0'
+          }`}
+        >
           <CanvasStage />
         </main>
         <PropertiesPanel />

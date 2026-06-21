@@ -15,6 +15,8 @@ export function AddMenu({
   const addOverlayLayer = useEditor((s) => s.addOverlayLayer);
   const addShapeLayer = useEditor((s) => s.addShapeLayer);
   const applyLayout = useEditor((s) => s.applyLayout);
+  const clearCollage = useEditor((s) => s.clearCollage);
+  const hasCollage = useEditor((s) => !!s.design.collage);
   const [open, setOpen] = useState(false);
 
   const item = 'block w-full rounded-md px-2 py-2 text-left text-sm hover:bg-white/10';
@@ -46,6 +48,9 @@ export function AddMenu({
               {l.label}
             </button>
           ))}
+          {hasCollage && (
+            <button className={item} onClick={run(clearCollage)}>✕ No layout</button>
+          )}
         </div>
       )}
     </div>

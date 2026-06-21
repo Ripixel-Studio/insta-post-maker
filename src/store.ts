@@ -82,6 +82,9 @@ interface EditorState {
   cropTargetId: string | null;
   editingTextId: string | null;
   selectedCellId: string | null;
+  /** Mobile properties bottom-sheet open state. */
+  sheetOpen: boolean;
+  setSheetOpen: (open: boolean) => void;
   setCropTarget: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
   selectCell: (id: string | null) => void;
@@ -127,6 +130,8 @@ interface EditorState {
   removeLayer: (id: string) => void;
   duplicateLayer: (id: string) => void;
   moveLayer: (id: string, dir: 'up' | 'down') => void;
+  /** Drag-and-drop reorder: move dragged layer to where target sits. */
+  reorderLayer: (draggedId: string, targetId: string) => void;
   flipLayer: (id: string, axis: 'x' | 'y') => void;
 
   undo: () => void;
@@ -155,6 +160,8 @@ export const useEditor = create<EditorState>((set, get) => {
     cropTargetId: null,
     editingTextId: null,
     selectedCellId: null,
+    sheetOpen: false,
+    setSheetOpen: (open) => set({ sheetOpen: open }),
     projectId: null,
     projectName: 'Untitled',
     customFonts: [],
@@ -429,6 +436,20 @@ export const useEditor = create<EditorState>((set, get) => {
         const j = dir === 'up' ? i + 1 : i - 1;
         if (j < 0 || j >= d.layers.length) return;
         [d.layers[i], d.layers[j]] = [d.layers[j], d.layers[i]];
+      }),
+
+    reorderLayer: (draggedId, targetId) =>
+      commit((d) => {
+        if (draggedId === targetId) return;
+        const from = d.layers.findIndex((l) => l.id === draggedId);
+        if (from < 0) return;
+        const [moved] = d.layers.splice(from, 1);
+        const to = d.layers.findIndex((l) => l.id === targetId);
+        if (to < 0) {
+          d.layers.splice(from, 0, moved); // target gone; put it back
+          return;
+        }
+        d.layers.splice(to, 0, moved);
       }),
 
     flipLayer: (id, axis) =>

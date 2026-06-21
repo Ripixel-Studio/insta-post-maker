@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useEditor } from '../store';
+import { useEditor, emptyDesign } from '../store';
+import { DEFAULT_PRESET } from '../presets';
 import { nextId } from '../assets';
 import { TEMPLATES, freshenDesign } from '../templates';
 import type { Design } from '../types';
@@ -64,6 +65,12 @@ export function TemplatesMenu() {
           <p className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">
             Starters
           </p>
+          <button
+            className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-white/5"
+            onClick={() => apply('Untitled', emptyDesign(DEFAULT_PRESET))}
+          >
+            Blank canvas
+          </button>
           {TEMPLATES.map((t) => (
             <button
               key={t.id}

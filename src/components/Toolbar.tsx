@@ -35,6 +35,7 @@ export function Toolbar() {
   const addOverlayLayer = useEditor((s) => s.addOverlayLayer);
   const addShapeLayer = useEditor((s) => s.addShapeLayer);
   const applyLayout = useEditor((s) => s.applyLayout);
+  const clearCollage = useEditor((s) => s.clearCollage);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
   const canUndo = useEditor((s) => s.past.length > 0);
@@ -176,8 +177,11 @@ export function Toolbar() {
           className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/10"
           value=""
           onChange={(e) => {
-            const tpl = LAYOUTS.find((l) => l.id === e.target.value);
-            if (tpl) applyLayout(tpl.build());
+            if (e.target.value === '__none') clearCollage();
+            else {
+              const tpl = LAYOUTS.find((l) => l.id === e.target.value);
+              if (tpl) applyLayout(tpl.build());
+            }
             e.target.value = '';
           }}
           title="Apply a collage layout"
@@ -188,6 +192,7 @@ export function Toolbar() {
               {l.label}
             </option>
           ))}
+          <option value="__none">✕ Remove layout</option>
         </select>
       </div>
       <AddMenu className="md:hidden" onAddImage={() => fileRef.current?.click()} />

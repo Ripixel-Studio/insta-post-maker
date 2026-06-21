@@ -82,8 +82,11 @@ function LayersList() {
   const selectedId = useEditor((s) => s.selectedId);
   const select = useEditor((s) => s.select);
   const moveLayer = useEditor((s) => s.moveLayer);
+  const reorderLayer = useEditor((s) => s.reorderLayer);
   const removeLayer = useEditor((s) => s.removeLayer);
   const updateLayer = useEditor((s) => s.updateLayer);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
 
   return (
     <div>
@@ -97,10 +100,36 @@ function LayersList() {
         {[...layers].reverse().map((layer) => (
           <li
             key={layer.id}
-            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
+            draggable
+            onDragStart={() => setDragId(layer.id)}
+            onDragEnd={() => {
+              setDragId(null);
+              setOverId(null);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (overId !== layer.id) setOverId(layer.id);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragId && dragId !== layer.id) reorderLayer(dragId, layer.id);
+              setDragId(null);
+              setOverId(null);
+            }}
+            className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm ${
               layer.id === selectedId ? 'bg-violet-500/20 text-white' : 'hover:bg-white/5'
+            } ${overId === layer.id && dragId !== layer.id ? 'ring-1 ring-violet-400' : ''} ${
+              dragId === layer.id ? 'opacity-50' : ''
             }`}
           >
+            <span className="cursor-grab select-none opacity-40" title="Drag to reorder">⠿</span>
+            <button
+              className="opacity-60 hover:opacity-100"
+              title={layer.locked ? 'Unlock' : 'Lock'}
+              onClick={() => updateLayer(layer.id, { locked: !layer.locked })}
+            >
+              {layer.locked ? '🔒' : '🔓'}
+            </button>
             <button
               className="opacity-60 hover:opacity-100"
               title={layer.visible ? 'Hide' : 'Show'}
@@ -554,6 +583,7 @@ function ShapeProps({ layer }: { layer: ShapeLayer }) {
 function CellPanel({ cellId }: { cellId: string }) {
   const design = useEditor((s) => s.design);
   const updateCell = useEditor((s) => s.updateCell);
+  const clearCollage = useEditor((s) => s.clearCollage);
   const fileRef = useRef<HTMLInputElement>(null);
   const cell = design.collage?.cells.find((c) => c.id === cellId);
   if (!cell) return null;
@@ -600,6 +630,12 @@ function CellPanel({ cellId }: { cellId: string }) {
           <p className="text-sm text-zinc-500">Drag the photo inside its cell to reposition it.</p>
         </>
       )}
+      <button
+        className="mt-3 w-full rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+        onClick={clearCollage}
+      >
+        ✕ Remove layout
+      </button>
     </div>
   );
 }
@@ -721,7 +757,8 @@ function PanelContent() {
 }
 
 export function PropertiesPanel() {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const sheetOpen = useEditor((s) => s.sheetOpen);
+  const setSheetOpen = useEditor((s) => s.setSheetOpen);
 
   // On mobile, slide the sheet up automatically when the selection changes to a
   // new layer/cell. Done via a store subscription (an event), not a render-time
@@ -730,7 +767,7 @@ export function PropertiesPanel() {
     return useEditor.subscribe((s, p) => {
       const newLayer = s.selectedId && s.selectedId !== p.selectedId;
       const newCell = s.selectedCellId && s.selectedCellId !== p.selectedCellId;
-      if (newLayer || newCell) setMobileOpen(true);
+      if (newLayer || newCell) s.setSheetOpen(true);
     });
   }, []);
 
@@ -742,26 +779,26 @@ export function PropertiesPanel() {
       </aside>
 
       {/* Mobile: floating button to open the edit sheet */}
-      {!mobileOpen && (
+      {!sheetOpen && (
         <button
           className="fixed bottom-4 right-4 z-20 rounded-full bg-violet-500 px-5 py-3 text-sm font-semibold text-white shadow-2xl md:hidden"
-          onClick={() => setMobileOpen(true)}
+          onClick={() => setSheetOpen(true)}
         >
           Edit ⚙
         </button>
       )}
 
-      {/* Mobile: bottom sheet */}
+      {/* Mobile: bottom sheet (fixed height so the canvas can reserve space) */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-30 flex max-h-[64vh] flex-col rounded-t-2xl border-t border-white/10 bg-[#14161b] shadow-2xl transition-transform duration-200 md:hidden ${
-          mobileOpen ? 'translate-y-0' : 'translate-y-full'
+        className={`fixed inset-x-0 bottom-0 z-30 flex h-[55vh] flex-col rounded-t-2xl border-t border-white/10 bg-[#14161b] shadow-2xl transition-transform duration-200 md:hidden ${
+          sheetOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
       >
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
           <span className="text-sm font-semibold text-zinc-200">Edit</span>
           <button
             className="rounded-md bg-white/5 px-3 py-1 text-sm text-zinc-100 hover:bg-white/10"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => setSheetOpen(false)}
           >
             Done
           </button>
