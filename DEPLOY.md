@@ -1,7 +1,18 @@
 # Deployment
 
 This app is a purely static, client-side SPA. It builds with `npm run build` into
-`dist/` and is hosted on **Firebase Hosting**, deployed automatically via **CircleCI**.
+`dist/` and is hosted on **Firebase Hosting**.
+
+## Live site
+
+- **URL:** <https://insta-post-maker-ripixel.web.app>
+- **Firebase project:** `insta-post-maker-ripixel`
+- **Console:** <https://console.firebase.google.com/project/insta-post-maker-ripixel/overview>
+
+The first deploy was done manually with the Firebase CLI (logged in as
+ripixel@gmail.com). To ship a change, run the manual deploy below. CircleCI
+automation is wired up in `.circleci/config.yml` but **not yet active** — it needs
+the repo pushed to a Git remote (GitHub/Bitbucket) and the env vars set (see below).
 
 ## Prerequisites
 
@@ -49,24 +60,25 @@ Firebase project ID:
 `--project` flag, so keeping them in sync is recommended but the CI deploy will use
 the env var regardless.)
 
-## Manual deploy (fallback)
-
-If you need to deploy by hand:
+## Manual deploy (current method)
 
 ```bash
 npm run build
 firebase deploy --only hosting
 ```
 
-This uses the project in `.firebaserc`. To target a specific project explicitly:
+This uses the project in `.firebaserc` (`insta-post-maker-ripixel`). To target a
+specific project explicitly:
 
 ```bash
-firebase deploy --only hosting --project your-real-project-id
+firebase deploy --only hosting --project insta-post-maker-ripixel
 ```
 
 ## Caching / PWA notes
 
 `firebase.json` sets a long, immutable cache (`max-age=31536000`) for hashed build
-assets under `/assets/**` and for js/css/woff2/image files, while `index.html`, the
-service worker (`sw.js` / `service-worker.js`), and `manifest.webmanifest` are served
-`no-cache` so PWA/service-worker updates are picked up immediately.
+assets under `/assets/**` and for js/css/woff2/image files, while the root (`/`),
+`index.html`, the service worker (`sw.js` / `service-worker.js`), and
+`manifest.webmanifest` are served `no-cache` so PWA/service-worker updates are picked
+up immediately. (Firebase matches header rules against the *request* path, so the
+root `/` needs its own rule — a request to `/` never matches the `/index.html` rule.)
