@@ -4,6 +4,7 @@ import { PRESETS } from '../presets';
 import { addImageAsset } from '../assets';
 import {
   exportDesign,
+  exportCarousel,
   downloadBlob,
   shareBlob,
   canShareFiles,
@@ -39,6 +40,7 @@ export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [format, setFormat] = useState<ExportFormat>('png');
   const [multiplier, setMultiplier] = useState<1 | 2>(1);
+  const [slides, setSlides] = useState(1);
   const [busy, setBusy] = useState(false);
 
   const activePreset = PRESETS.find(
@@ -69,8 +71,17 @@ export function Toolbar() {
   async function handleExport() {
     setBusy(true);
     try {
-      const { blob, name } = await build();
-      downloadBlob(blob, name);
+      if (slides > 1) {
+        const blobs = await exportCarousel(design, { format, multiplier }, slides);
+        const ext = format === 'png' ? 'png' : 'jpg';
+        // Stagger downloads so the browser doesn't block the batch.
+        blobs.forEach((blob, i) =>
+          setTimeout(() => downloadBlob(blob, `carousel-${i + 1}-of-${slides}.${ext}`), i * 250),
+        );
+      } else {
+        const { blob, name } = await build();
+        downloadBlob(blob, name);
+      }
     } catch (err) {
       console.error(err);
       alert((err as Error).message);
@@ -200,6 +211,17 @@ export function Toolbar() {
         >
           <option value={1}>@1x</option>
           <option value={2}>@2x</option>
+        </select>
+        <select
+          className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200"
+          value={slides}
+          onChange={(e) => setSlides(Number(e.target.value))}
+          title="Split into N carousel slides"
+        >
+          <option value={1}>1 slide</option>
+          <option value={2}>2 slides</option>
+          <option value={3}>3 slides</option>
+          <option value={4}>4 slides</option>
         </select>
         <button
           className="rounded-md bg-violet-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-violet-400 disabled:opacity-50"

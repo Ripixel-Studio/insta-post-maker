@@ -1,3 +1,4 @@
+import type Konva from 'konva';
 import { stageHolder } from './canvas/stageHolder';
 import type { Design } from './types';
 
@@ -19,18 +20,12 @@ export interface ExportOptions {
  * so a pixelRatio of (design.width / stage.width()) renders back at 1:1 — i.e.
  * exactly `design.width` px wide. The @2x option doubles that.
  */
-export async function exportDesign(
-  design: Design,
-  opts: ExportOptions,
-): Promise<Blob> {
+/** Hide selection transformers, run an async rasterise, then restore them. */
+async function withCleanStage<T>(fn: (stage: Konva.Stage) => Promise<T>): Promise<T> {
   const stage = stageHolder.current;
   if (!stage) throw new Error('Canvas is not ready yet.');
-
-  // Ensure all (possibly Google-CDN) fonts are loaded before rasterising,
-  // otherwise text can render in a fallback face.
   if (document.fonts?.ready) await document.fonts.ready;
 
-  // Detach the selection transformer/handles so they don't appear in output.
   const transformers = stage.find('Transformer');
   const restore = transformers.map((t) => {
     const wasVisible = t.visible();
@@ -38,25 +33,66 @@ export async function exportDesign(
     return () => t.visible(wasVisible);
   });
   stage.batchDraw();
-
-  const basePixelRatio = design.width / stage.width();
-  const pixelRatio = basePixelRatio * opts.multiplier;
-  const mimeType = opts.format === 'png' ? 'image/png' : 'image/jpeg';
-
   try {
-    const blob: Blob = await new Promise((resolve, reject) => {
-      stage.toBlob({
-        mimeType,
-        quality: opts.quality ?? 0.92,
-        pixelRatio,
-        callback: (b) => (b ? resolve(b) : reject(new Error('Export failed'))),
-      });
-    });
-    return blob;
+    return await fn(stage);
   } finally {
-    restore.forEach((fn) => fn());
+    restore.forEach((r) => r());
     stage.batchDraw();
   }
+}
+
+function toBlob(
+  stage: Konva.Stage,
+  opts: ExportOptions,
+  pixelRatio: number,
+  region?: { x: number; y: number; width: number; height: number },
+): Promise<Blob> {
+  const mimeType = opts.format === 'png' ? 'image/png' : 'image/jpeg';
+  return new Promise((resolve, reject) => {
+    stage.toBlob({
+      mimeType,
+      quality: opts.quality ?? 0.92,
+      pixelRatio,
+      ...region,
+      callback: (b) => (b ? resolve(b) : reject(new Error('Export failed'))),
+    });
+  });
+}
+
+export async function exportDesign(design: Design, opts: ExportOptions): Promise<Blob> {
+  return withCleanStage((stage) => {
+    const pixelRatio = (design.width / stage.width()) * opts.multiplier;
+    return toBlob(stage, opts, pixelRatio);
+  });
+}
+
+/**
+ * Slice the design into N equal vertical panels and export each as its own
+ * image — a seamless Instagram carousel that pans as you swipe. Each slide is
+ * (design.width / slides) px wide × design.height tall (× the @2x multiplier).
+ */
+export async function exportCarousel(
+  design: Design,
+  opts: ExportOptions,
+  slides: number,
+): Promise<Blob[]> {
+  return withCleanStage(async (stage) => {
+    const displayScale = stage.width() / design.width;
+    const pixelRatio = (design.width / stage.width()) * opts.multiplier;
+    const sliceDocW = design.width / slides;
+    const blobs: Blob[] = [];
+    for (let i = 0; i < slides; i++) {
+      blobs.push(
+        await toBlob(stage, opts, pixelRatio, {
+          x: i * sliceDocW * displayScale,
+          y: 0,
+          width: sliceDocW * displayScale,
+          height: stage.height(),
+        }),
+      );
+    }
+    return blobs;
+  });
 }
 
 /** True if the browser can share image files (mobile Safari/Chrome, etc.). */

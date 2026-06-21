@@ -132,5 +132,7 @@ Layer = Image | Text | Shape | Overlay
 7. ✅ **PWA + share/export options** (PNG/JPEG @1x/@2x, Web Share). Firebase/CircleCI
    deploy config is in the repo but **deployment is intentionally not run yet**
    (running locally for now).
-8. ⏳ **v2** (not started): background removal, magic resize, templates gallery,
-   custom font upload, carousel split, animated export.
+8. ✅ **v2 (mostly done)**: in-browser background removal, magic resize,
+   templates gallery + save-as-template, custom font upload, eyedropper +
+   recent-colour palette, carousel split. *(Still later: stickers/emoji,
+   arbitrary-shape masking, brand palettes, animated/MP4 export.)*
