@@ -225,16 +225,6 @@ export function CanvasStage() {
                       key={layer.id}
                       layer={layer}
                       isSelected={layer.id === selectedId}
-                      onSelect={() => select(layer.id)}
-                      onChange={(patch: Partial<Layer>) => updateLayer(layer.id, patch)}
-                      onStartTextEdit={
-                        layer.type === 'text'
-                          ? () => {
-                              select(layer.id);
-                              setEditingText(layer.id);
-                            }
-                          : undefined
-                      }
                     />
                   ),
                 )}

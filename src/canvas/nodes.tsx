@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Image as KonvaImage, Text as KonvaText, Rect, Line, Group } from 'react-konva';
 import Konva from 'konva';
 import useImage from 'use-image';
@@ -11,14 +11,26 @@ import type {
   ShapeLayer,
 } from '../types';
 import { getAsset } from '../assets';
+import { useEditor } from '../store';
 
 interface NodeProps {
   layer: Layer;
   isSelected: boolean;
-  onSelect: () => void;
-  onChange: (patch: Partial<Layer>) => void;
-  /** Text only: request inline editing (double-click / double-tap). */
-  onStartTextEdit?: () => void;
+}
+
+/** Stable per-node store actions (used instead of fresh callback props so the
+ * memoised nodes don't re-render when an unrelated layer changes). */
+function useNodeActions(layer: Layer) {
+  const select = useEditor((s) => s.select);
+  const updateLayer = useEditor((s) => s.updateLayer);
+  const setEditingText = useEditor((s) => s.setEditingText);
+  const onSelect = () => select(layer.id);
+  const onChange = (patch: Partial<Layer>) => updateLayer(layer.id, patch);
+  const onStartTextEdit = () => {
+    select(layer.id);
+    setEditingText(layer.id);
+  };
+  return { onSelect, onChange, onStartTextEdit };
 }
 
 /**
@@ -42,12 +54,16 @@ function centeredProps(layer: Layer) {
     visible: layer.visible,
     globalCompositeOperation: layer.blendMode,
     listening: !layer.locked,
+    // Skip Konva's extra double-draw pass for crisp strokes — not needed here
+    // and noticeably cheaper per frame.
+    perfectDrawEnabled: false,
+    shadowForStrokeEnabled: false,
   };
 }
 
 /** Persist drag/transform back to the model, converting the centred node
  * position back to a top-left box and baking any scale into width/height. */
-function useCommonHandlers(layer: Layer, onChange: NodeProps['onChange']) {
+function useCommonHandlers(layer: Layer, onChange: (patch: Partial<Layer>) => void) {
   const onDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
     onChange({
@@ -159,11 +175,12 @@ function maskPath(ctx: Konva.Context, w: number, h: number, shape: string) {
   ctx.closePath();
 }
 
-export function ImageNode({ layer, isSelected, onSelect, onChange }: NodeProps) {
+export function ImageNode({ layer, isSelected }: NodeProps) {
   const img = layer as ImageLayer;
   const asset = getAsset(img.assetId);
   const [image] = useImage(asset?.url ?? '', 'anonymous');
   const ref = useRef<Konva.Image>(null);
+  const { onSelect, onChange } = useNodeActions(layer);
   const { onDragEnd, onTransformEnd } = useCommonHandlers(layer, onChange);
 
   // Crop rect in source pixels (whole image when no crop set).
@@ -191,11 +208,11 @@ export function ImageNode({ layer, isSelected, onSelect, onChange }: NodeProps) 
       node.clearCache();
     }
     node.getLayer()?.batchDraw();
+    // Deliberately NOT keyed on width/height: a cached node scales its bitmap,
+    // so resizing/pinching doesn't need a (costly) re-rasterise every frame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     image,
-    img.width,
-    img.height,
     img.filters.brightness,
     img.filters.contrast,
     img.filters.saturation,
@@ -205,6 +222,19 @@ export function ImageNode({ layer, isSelected, onSelect, onChange }: NodeProps) 
     crop?.width,
     crop?.height,
   ]);
+
+  // Re-cache once the size settles (debounced) so a filtered image resized after
+  // filtering re-sharpens — without paying for a re-rasterise every pinch frame.
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || !image || !filtersActive(img.filters)) return;
+    const id = setTimeout(() => {
+      node.cache();
+      node.getLayer()?.batchDraw();
+    }, 160);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [img.width, img.height]);
 
   const imageProps = {
     image,
@@ -250,8 +280,9 @@ export function ImageNode({ layer, isSelected, onSelect, onChange }: NodeProps) 
   );
 }
 
-export function TextNode({ layer, onSelect, onChange, onStartTextEdit }: NodeProps) {
+export function TextNode({ layer }: NodeProps) {
   const t = layer as TextLayer;
+  const { onSelect, onChange, onStartTextEdit } = useNodeActions(layer);
   const { onDragEnd, onTransformEnd } = useCommonHandlers(layer, onChange);
 
   const textProps = {
@@ -335,8 +366,9 @@ function gradientPoints(o: OverlayLayer) {
   }
 }
 
-export function OverlayNode({ layer, onSelect, onChange }: NodeProps) {
+export function OverlayNode({ layer }: NodeProps) {
   const o = layer as OverlayLayer;
+  const { onSelect, onChange } = useNodeActions(layer);
   const { onDragEnd, onTransformEnd } = useCommonHandlers(layer, onChange);
   const { start, end } = gradientPoints(o);
   const colorStops = o.stops.flatMap((s) => [s.offset, s.color]);
@@ -370,8 +402,9 @@ export function OverlayNode({ layer, onSelect, onChange }: NodeProps) {
   );
 }
 
-export function ShapeNode({ layer, onSelect, onChange }: NodeProps) {
+export function ShapeNode({ layer }: NodeProps) {
   const s = layer as ShapeLayer;
+  const { onSelect, onChange } = useNodeActions(layer);
   const { onDragEnd, onTransformEnd } = useCommonHandlers(layer, onChange);
   const common = {
     ...centeredProps(layer),
@@ -409,7 +442,13 @@ export function ShapeNode({ layer, onSelect, onChange }: NodeProps) {
   );
 }
 
-export function LayerNode(props: NodeProps) {
+/**
+ * Memoised so that updating one layer only re-renders that layer's node.
+ * Immer gives unchanged layers a stable object reference, so the default
+ * shallow prop comparison (layer ref + isSelected) skips everything else —
+ * turning an N-layer redraw per interaction frame into a 1-layer redraw.
+ */
+export const LayerNode = memo(function LayerNode(props: NodeProps) {
   switch (props.layer.type) {
     case 'image':
       return <ImageNode {...props} />;
@@ -422,4 +461,4 @@ export function LayerNode(props: NodeProps) {
     default:
       return null;
   }
-}
+});
