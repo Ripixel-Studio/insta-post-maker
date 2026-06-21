@@ -127,6 +127,10 @@ interface EditorState {
   addShapeLayer: (shape: ShapeLayer['shape']) => void;
 
   updateLayer: (id: string, patch: Partial<Layer>) => void;
+  /** Update without pushing history (for live gestures); pair with beginGesture. */
+  liveUpdateLayer: (id: string, patch: Partial<Layer>) => void;
+  /** Snapshot once at the start of a continuous gesture so it's a single undo. */
+  beginGesture: () => void;
   removeLayer: (id: string) => void;
   duplicateLayer: (id: string) => void;
   moveLayer: (id: string, dir: 'up' | 'down') => void;
@@ -406,6 +410,17 @@ export const useEditor = create<EditorState>((set, get) => {
         const layer = d.layers.find((l) => l.id === id);
         if (layer) Object.assign(layer, patch);
       }),
+
+    liveUpdateLayer: (id, patch) =>
+      set((s) => ({
+        design: produce(s.design, (d) => {
+          const layer = d.layers.find((l) => l.id === id);
+          if (layer) Object.assign(layer, patch);
+        }),
+      })),
+
+    beginGesture: () =>
+      set((s) => ({ past: [...s.past, s.design].slice(-HISTORY_LIMIT), future: [] })),
 
     removeLayer: (id) => {
       commit((d) => {

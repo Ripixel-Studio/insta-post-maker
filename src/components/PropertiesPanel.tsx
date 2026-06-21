@@ -3,7 +3,7 @@ import { useEditor } from '../store';
 import { FONTS, uploadFont } from '../fonts';
 import { FILTER_PRESETS } from '../filters';
 import { PRESETS } from '../presets';
-import { addImageAsset } from '../assets';
+import { addImageAsset, getAsset } from '../assets';
 import { cutoutAsset } from '../bgRemoval';
 import { bakeOutline } from '../sticker';
 import { ColorField } from './ColorField';
@@ -87,6 +87,27 @@ function LayersList() {
   const updateLayer = useEditor((s) => s.updateLayer);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const dragRef = useRef<string | null>(null);
+
+  // Pointer-based drag handle: works for both mouse and touch (unlike native
+  // HTML5 drag-and-drop, which doesn't fire on touchscreens).
+  const handleMove = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const el = document
+      .elementFromPoint(e.clientX, e.clientY)
+      ?.closest('[data-layer-id]');
+    const id = el?.getAttribute('data-layer-id');
+    if (id && id !== overId) setOverId(id);
+  };
+  const handleUp = (e: React.PointerEvent) => {
+    if (dragRef.current && overId && overId !== dragRef.current) {
+      reorderLayer(dragRef.current, overId);
+    }
+    dragRef.current = null;
+    setDragId(null);
+    setOverId(null);
+    (e.target as Element).releasePointerCapture?.(e.pointerId);
+  };
 
   return (
     <div>
@@ -100,29 +121,26 @@ function LayersList() {
         {[...layers].reverse().map((layer) => (
           <li
             key={layer.id}
-            draggable
-            onDragStart={() => setDragId(layer.id)}
-            onDragEnd={() => {
-              setDragId(null);
-              setOverId(null);
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (overId !== layer.id) setOverId(layer.id);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (dragId && dragId !== layer.id) reorderLayer(dragId, layer.id);
-              setDragId(null);
-              setOverId(null);
-            }}
+            data-layer-id={layer.id}
             className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm ${
               layer.id === selectedId ? 'bg-violet-500/20 text-white' : 'hover:bg-white/5'
             } ${overId === layer.id && dragId !== layer.id ? 'ring-1 ring-violet-400' : ''} ${
               dragId === layer.id ? 'opacity-50' : ''
             }`}
           >
-            <span className="cursor-grab select-none opacity-40" title="Drag to reorder">⠿</span>
+            <span
+              className="cursor-grab touch-none select-none px-0.5 opacity-40"
+              title="Drag to reorder"
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                dragRef.current = layer.id;
+                setDragId(layer.id);
+              }}
+              onPointerMove={handleMove}
+              onPointerUp={handleUp}
+            >
+              ⠿
+            </span>
             <button
               className="opacity-60 hover:opacity-100"
               title={layer.locked ? 'Unlock' : 'Lock'}
@@ -209,12 +227,30 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
   const addImageLayer = useEditor((s) => s.addImageLayer);
   const setCropTarget = useEditor((s) => s.setCropTarget);
+  const design = useEditor((s) => s.design);
   const [bgProgress, setBgProgress] = useState<number | null>(null);
   const [stickerBusy, setStickerBusy] = useState(false);
   const f = layer.filters;
   const isSticker = !!layer.baseAssetId;
   const setFilter = (patch: Partial<ImageLayer['filters']>) =>
     updateLayer(layer.id, { filters: { ...f, ...patch } });
+
+  // Scale the image to cover the whole canvas (no distortion), centre-cropping
+  // the overflow via the crop rect.
+  function fillCanvas() {
+    const asset = getAsset(layer.assetId);
+    const cw = design.width;
+    const ch = design.height;
+    const sw = asset?.width ?? cw;
+    const sh = asset?.height ?? ch;
+    const canvasAspect = cw / ch;
+    const srcAspect = sw / sh;
+    const crop =
+      srcAspect > canvasAspect
+        ? { x: (1 - canvasAspect / srcAspect) / 2, y: 0, width: canvasAspect / srcAspect, height: 1 }
+        : { x: 0, y: (1 - srcAspect / canvasAspect) / 2, width: 1, height: srcAspect / canvasAspect };
+    updateLayer(layer.id, { x: 0, y: 0, width: cw, height: ch, rotation: 0, crop });
+  }
 
   async function removeBg() {
     setBgProgress(0);
@@ -236,10 +272,20 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
       const cutId = await cutoutAsset(layer.assetId, (r) => setBgProgress(r));
       if (cutId) {
         const newLayerId = addImageLayer(cutId);
+        // Align the sticker exactly over the image that generated it (same box,
+        // rotation, flip and crop) so layering lines up pixel-for-pixel.
         updateLayer(newLayerId, {
           name: 'Sticker',
           baseAssetId: cutId,
           outline: { enabled: false, color: '#ffffff', width: 16 },
+          x: layer.x,
+          y: layer.y,
+          width: layer.width,
+          height: layer.height,
+          rotation: layer.rotation,
+          flipX: layer.flipX,
+          flipY: layer.flipY,
+          crop: layer.crop,
         });
       }
     } catch (err) {
@@ -269,13 +315,20 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
 
   return (
     <>
-      <Field label="Crop">
+      <Field label="Crop & fit">
         <div className="flex gap-1">
           <button
             className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
             onClick={() => setCropTarget(layer.id)}
           >
-            ✂ Crop image
+            ✂ Crop
+          </button>
+          <button
+            className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+            onClick={fillCanvas}
+            title="Scale to cover the whole canvas"
+          >
+            ⛶ Fill canvas
           </button>
           {layer.crop && (
             <button

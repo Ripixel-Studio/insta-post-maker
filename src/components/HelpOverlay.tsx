@@ -8,6 +8,7 @@ const SHORTCUTS: [string, string][] = [
   ['Esc', 'Deselect / cancel crop'],
   ['Double-click text', 'Edit text inline'],
   ['Drag corner / top handle', 'Scale / rotate'],
+  ['Two-finger pinch / twist', 'Scale & rotate (touch)'],
   ['Drag onto canvas / paste', 'Add an image'],
 ];
 

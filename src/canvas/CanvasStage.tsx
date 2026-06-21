@@ -39,8 +39,60 @@ export function CanvasStage() {
   const transformerRef = useRef<Konva.Transformer>(null);
   const fillInputRef = useRef<HTMLInputElement>(null);
   const pendingCellRef = useRef<string | null>(null);
+  const gestureRef = useRef<{ dist: number; angle: number } | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [guides, setGuides] = useState<Guide[]>([]);
+
+  // Two-finger pinch-to-scale + twist-to-rotate on the selected layer — much
+  // easier than the small transformer handles on a touch screen.
+  function onStageTouchMove(e: Konva.KonvaEventObject<TouchEvent>) {
+    const touches = e.evt.touches;
+    if (touches.length !== 2) return;
+    const { selectedId, design, liveUpdateLayer, beginGesture } = useEditor.getState();
+    if (!selectedId) return;
+    const layer = design.layers.find((l) => l.id === selectedId);
+    if (!layer || layer.locked) return;
+    e.evt.preventDefault();
+
+    const a = touches[0];
+    const b = touches[1];
+    const dx = b.clientX - a.clientX;
+    const dy = b.clientY - a.clientY;
+    const info = { dist: Math.hypot(dx, dy), angle: (Math.atan2(dy, dx) * 180) / Math.PI };
+
+    if (!gestureRef.current) {
+      gestureRef.current = info;
+      beginGesture();
+      stageRef.current?.findOne(`#${selectedId}`)?.stopDrag();
+      return;
+    }
+
+    const scaleBy = info.dist / gestureRef.current.dist;
+    const dAngle = info.angle - gestureRef.current.angle;
+    const cx = layer.x + layer.width / 2;
+    const cy = layer.y + layer.height / 2;
+    const newW = Math.max(5, layer.width * scaleBy);
+    const newH = Math.max(5, layer.height * scaleBy);
+    const patch: Partial<Layer> = {
+      x: cx - newW / 2,
+      y: cy - newH / 2,
+      width: newW,
+      height: newH,
+      rotation: layer.rotation + dAngle,
+    };
+    if (layer.type === 'text') {
+      (patch as Partial<TextLayer>).fontSize = Math.max(
+        4,
+        Math.round((layer as TextLayer).fontSize * scaleBy),
+      );
+    }
+    liveUpdateLayer(selectedId, patch);
+    gestureRef.current = info;
+  }
+
+  function onStageTouchEnd(e: Konva.KonvaEventObject<TouchEvent>) {
+    if (e.evt.touches.length < 2) gestureRef.current = null;
+  }
 
   async function onFillFile(file: File | undefined) {
     const cellId = pendingCellRef.current;
@@ -141,6 +193,8 @@ export function CanvasStage() {
             scaleY={scale}
             onMouseDown={onBackgroundClick}
             onTouchStart={onBackgroundClick}
+            onTouchMove={onStageTouchMove}
+            onTouchEnd={onStageTouchEnd}
           >
             <KonvaLayer>
               <Rect
