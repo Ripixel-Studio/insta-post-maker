@@ -10,6 +10,7 @@ import {
   type ExportFormat,
 } from '../export';
 import { ProjectsMenu } from './ProjectsMenu';
+import { TemplatesMenu } from './TemplatesMenu';
 import { HelpOverlay } from './HelpOverlay';
 import { LAYOUTS } from '../collage';
 
@@ -99,6 +100,7 @@ export function Toolbar() {
       </span>
 
       <ProjectsMenu />
+      <TemplatesMenu />
 
       <div className="mx-1 h-6 w-px bg-white/10" />
 

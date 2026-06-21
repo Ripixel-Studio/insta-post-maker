@@ -7,6 +7,7 @@ import {
   putProject,
   deleteProject,
   setMeta,
+  nowMs,
   type StoredProject,
 } from '../persistence';
 
@@ -31,7 +32,7 @@ export function ProjectsMenu() {
     const design = emptyDesign(DEFAULT_PRESET);
     setProjectMeta(id, 'Untitled');
     loadDesign(design);
-    await putProject({ id, name: 'Untitled', design, updatedAt: Date.now() });
+    await putProject({ id, name: 'Untitled', design, updatedAt: nowMs() });
     await setMeta(ACTIVE_KEY, id);
     setOpen(false);
   }

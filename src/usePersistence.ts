@@ -8,6 +8,7 @@ import {
   getProject,
   putProject,
   listProjects,
+  nowMs,
 } from './persistence';
 
 const ACTIVE_KEY = 'activeProjectId';
@@ -47,7 +48,7 @@ export function usePersistence() {
         // First run: adopt the current (empty) design as a new project.
         const id = nextId('proj');
         setProjectMeta(id, 'Untitled');
-        await putProject({ id, name: 'Untitled', design, updatedAt: Date.now() });
+        await putProject({ id, name: 'Untitled', design, updatedAt: nowMs() });
         await setMeta(ACTIVE_KEY, id);
       }
       loadedRef.current = true;
@@ -70,7 +71,7 @@ export function usePersistence() {
           id: state.projectId!,
           name: state.projectName,
           design: state.design,
-          updatedAt: Date.now(),
+          updatedAt: nowMs(),
         });
       }, 500);
     });

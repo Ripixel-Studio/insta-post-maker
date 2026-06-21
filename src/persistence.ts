@@ -26,11 +26,19 @@ export interface StoredFont {
   blob: Blob;
 }
 
+export interface StoredTemplate {
+  id: string;
+  name: string;
+  design: Design;
+  updatedAt: number;
+}
+
 class EditorDB extends Dexie {
   assets!: Table<StoredAsset, string>;
   projects!: Table<StoredProject, string>;
   meta!: Table<{ key: string; value: string }, string>;
   fonts!: Table<StoredFont, string>;
+  templates!: Table<StoredTemplate, string>;
 
   constructor() {
     super('insta-post-maker');
@@ -46,10 +54,22 @@ class EditorDB extends Dexie {
       meta: 'key',
       fonts: 'family',
     });
+    // v3 adds user-saved design templates.
+    this.version(3).stores({
+      assets: 'id',
+      projects: 'id, updatedAt',
+      meta: 'key',
+      fonts: 'family',
+      templates: 'id, updatedAt',
+    });
   }
 }
 
 export const db = new EditorDB();
+
+/** Wall-clock timestamp helper (kept out of components so the React purity
+ * lint rule doesn't flag inline Date.now() calls). */
+export const nowMs = (): number => Date.now();
 
 /* --------------------------------- Assets --------------------------------- */
 
@@ -88,6 +108,21 @@ export async function putFont(font: StoredFont): Promise<void> {
 
 export async function getAllFonts(): Promise<StoredFont[]> {
   return db.fonts.toArray();
+}
+
+/* ------------------------------- Templates ------------------------------- */
+
+export async function putTemplate(t: StoredTemplate): Promise<void> {
+  await db.templates.put(t);
+}
+
+export async function listTemplates(): Promise<StoredTemplate[]> {
+  const all = await db.templates.toArray();
+  return all.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  await db.templates.delete(id);
 }
 
 /* ---------------------------------- Meta ---------------------------------- */
