@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { useEditor } from '../store';
 import { addImageAsset } from '../assets';
 import {
-  parseShowcaseId,
+  parseInput,
   fetchShowcase,
+  fetchProfile,
   extractElements,
+  entrySummary,
   type ShowcaseElements,
+  type ProfileEntry,
   type StatItem,
   type ChartItem,
   type ImageItem,
@@ -25,24 +28,47 @@ export function FitGlueImport() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [els, setEls] = useState<ShowcaseElements | null>(null);
+  const [entries, setEntries] = useState<ProfileEntry[] | null>(null);
 
   async function load() {
     setError(null);
-    const id = parseShowcaseId(url);
-    if (!id) {
-      setError('Enter a showcase URL or slug.');
+    const parsed = parseInput(url);
+    if (!parsed) {
+      setError('Enter a showcase URL, a slug, or @handle.');
       return;
     }
     setLoading(true);
     try {
-      const data = await fetchShowcase(id);
-      setEls(extractElements(data));
+      if (parsed.type === 'profile') {
+        const list = await fetchProfile(parsed.slug);
+        setEntries(list);
+        setEls(null);
+        if (list.length === 0) setError('No public activities found for that handle.');
+      } else {
+        const data = await fetchShowcase(parsed.id);
+        setEls(extractElements(data));
+        setEntries(null);
+      }
     } catch (err) {
       console.error(err);
       setError(
         'Could not fetch (often CORS until FitGlue redeploys). Paste the showcase JSON below instead.',
       );
       setShowPaste(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openEntry(e: ProfileEntry) {
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await fetchShowcase(e.showcaseId);
+      setEls(extractElements(data));
+    } catch (err) {
+      console.error(err);
+      setError('Could not load that activity.');
     } finally {
       setLoading(false);
     }
@@ -143,7 +169,7 @@ export function FitGlueImport() {
               <div className="flex gap-2">
                 <input
                   className="flex-1 rounded-md border border-white/10 bg-white/5 px-2 py-2 text-sm text-zinc-100 outline-none focus:border-violet-400"
-                  placeholder="https://fitglue.tech/@you/your-activity"
+                  placeholder="@you  ·  or a full activity URL"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && load()}
@@ -178,8 +204,40 @@ export function FitGlueImport() {
 
               {error && <p className="text-sm text-amber-400">{error}</p>}
 
+              {/* Activity picker (after entering a @handle). */}
+              {entries && !els && (
+                <div>
+                  <p className="mb-1 text-[10px] uppercase tracking-wide text-zinc-500">
+                    Pick an activity
+                  </p>
+                  <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+                    {entries.map((e) => (
+                      <button
+                        key={e.showcaseId}
+                        className="flex items-center gap-3 rounded-md bg-white/5 px-2 py-2 text-left text-sm hover:bg-white/10"
+                        onClick={() => openEntry(e)}
+                      >
+                        {e.routeThumbnailUrl && (
+                          <img src={e.routeThumbnailUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                        )}
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-white">{e.title}</span>
+                          <span className="block truncate text-xs text-zinc-400">{entrySummary(e)}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {els && (
                 <div className="flex flex-col gap-4">
+                  {entries && (
+                    <button className="self-start text-xs text-violet-300 hover:underline"
+                      onClick={() => setEls(null)}>
+                      ← Back to activities
+                    </button>
+                  )}
                   {/* Title */}
                   <div>
                     <p className="mb-1 text-[10px] uppercase tracking-wide text-zinc-500">Headline</p>

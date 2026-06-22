@@ -37,27 +37,71 @@ export interface ShowcaseElements {
   images: ImageItem[];
 }
 
-/** Pull the showcase id out of a URL, "@handle/slug", or bare slug. */
-export function parseShowcaseId(input: string): string | null {
+export type ParsedInput =
+  | { type: 'activity'; id: string }
+  | { type: 'profile'; slug: string };
+
+/** Classify the input as a single activity (URL/slug) or a profile (@handle). */
+export function parseInput(input: string): ParsedInput | null {
   const s = input.trim();
   if (!s) return null;
-  try {
-    if (/^https?:\/\//i.test(s)) {
-      const path = new URL(s).pathname.replace(/\/+$/, '');
-      const seg = path.split('/').filter(Boolean);
-      return seg[seg.length - 1] || null;
+
+  let segs: string[];
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      segs = new URL(s).pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+    } catch {
+      return null;
     }
-  } catch {
-    /* not a URL */
+  } else {
+    segs = s.split('/').filter(Boolean);
   }
-  const seg = s.split('/').filter(Boolean);
-  return seg[seg.length - 1] || null;
+  if (segs.length === 0) return null;
+  if (segs.length >= 2) return { type: 'activity', id: segs[segs.length - 1] };
+
+  // Single segment: "@handle" → profile, otherwise treat as an activity slug.
+  const only = segs[0];
+  if (only.startsWith('@')) return { type: 'profile', slug: only.slice(1) };
+  return { type: 'activity', id: only };
 }
 
 export async function fetchShowcase(id: string): Promise<unknown> {
   const res = await fetch(`${API_BASE}/${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(`FitGlue returned ${res.status}`);
   return res.json();
+}
+
+export interface ProfileEntry {
+  showcaseId: string;
+  title: string;
+  activityType?: string;
+  startTime?: string;
+  distanceMeters?: number;
+  durationSeconds?: number;
+  routeThumbnailUrl?: string;
+}
+
+/** List a handle's public activities (most recent first). */
+export async function fetchProfile(slug: string): Promise<ProfileEntry[]> {
+  const res = await fetch(`${API_BASE}/profile/${encodeURIComponent(slug)}?page=1`);
+  if (!res.ok) throw new Error(`FitGlue returned ${res.status}`);
+  const data = (await res.json()) as { profile?: { entries?: ProfileEntry[] } };
+  return data.profile?.entries ?? [];
+}
+
+/** Short label for a profile entry, e.g. "Run · 10.0 km · 49:12". */
+export function entrySummary(e: ProfileEntry): string {
+  const parts: string[] = [];
+  if (e.activityType) parts.push(prettyType(e.activityType));
+  if (e.distanceMeters && e.distanceMeters > 0) parts.push(`${(e.distanceMeters / 1000).toFixed(1)} km`);
+  if (e.durationSeconds && e.durationSeconds > 0) parts.push(fmtDuration(e.durationSeconds));
+  if (e.startTime) {
+    const dt = new Date(e.startTime);
+    if (!Number.isNaN(dt.getTime())) {
+      parts.push(dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }));
+    }
+  }
+  return parts.join(' · ');
 }
 
 /* --------------------------------- helpers -------------------------------- */
