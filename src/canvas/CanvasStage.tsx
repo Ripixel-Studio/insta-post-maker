@@ -372,7 +372,7 @@ export function CanvasStage() {
                 width: editingLayer.width * scale,
                 height: editingLayer.height * scale,
                 fontSize: editingLayer.fontSize * scale,
-                fontFamily: editingLayer.fontFamily,
+                fontFamily: `"${editingLayer.fontFamily}", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`,
                 color: editingLayer.fill,
                 textAlign: editingLayer.align,
                 lineHeight: editingLayer.lineHeight,

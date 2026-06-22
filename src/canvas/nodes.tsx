@@ -16,6 +16,11 @@ import type {
 import { getAsset } from '../assets';
 import { useEditor } from '../store';
 
+/** Colour-emoji fallback families appended after the chosen font so emoji
+ * render instead of showing as tofu. Konva quotes multi-word names itself. */
+const EMOJI_FALLBACK = 'Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji';
+const withEmoji = (family: string) => `${family}, ${EMOJI_FALLBACK}`;
+
 interface NodeProps {
   layer: Layer;
   isSelected: boolean;
@@ -311,7 +316,7 @@ export function TextNode({ layer }: NodeProps) {
 
   const textProps = {
     text: t.text,
-    fontFamily: t.fontFamily,
+    fontFamily: withEmoji(t.fontFamily),
     fontSize: t.fontSize,
     fontStyle: t.fontStyle,
     ...fillProps(t, t.width, t.height),
@@ -424,7 +429,7 @@ function measureCtx(): CanvasRenderingContext2D {
 function fontCss(t: TextLayer): string {
   const italic = t.fontStyle.includes('italic') ? 'italic ' : '';
   const bold = t.fontStyle.includes('bold') ? 'bold ' : '';
-  return `${italic}${bold}${t.fontSize}px "${t.fontFamily}", sans-serif`;
+  return `${italic}${bold}${t.fontSize}px "${t.fontFamily}", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
 }
 /** Word-wrap text to maxWidth, returning each line + its measured width. */
 function wrapHighlightLines(t: TextLayer, maxWidth: number): { text: string; width: number }[] {
