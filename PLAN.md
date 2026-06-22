@@ -132,6 +132,22 @@ Layer = Image | Text | Shape | Overlay
 7. ✅ **PWA + share/export options** (PNG/JPEG @1x/@2x, Web Share). Firebase/CircleCI
    deploy config is in the repo but **deployment is intentionally not run yet**
    (running locally for now).
+### FitGlue integration
+
+Import elements from a public FitGlue showcase (`fitglue.tech/@handle/slug`):
+- Selection: paste the showcase URL/slug; we fetch `GET fitglue.tech/api/public/showcase/{id}`
+  (public, CORS-enabled). A future nicety: enter `@handle` → list the user's public
+  activities via `/api/public/showcase/profile/{slug}` and pick one.
+- Lean client render (current): stats → editable text, charts/route → drawn from
+  the raw series/GPS as transparent graphics, photos/banner/heatmap → image URLs.
+- **Future (requested): postMessage bridge.** FitGlue adds an embeddable `/embed/export`
+  route that allows framing from this origin; insta-post-maker drives it via a hidden
+  iframe and `postMessage` (request element → FitGlue renders with its own export code →
+  posts the PNG back). Pixel-consistent with FitGlue, reuses its renders. Would want a
+  transparent-element render mode. Two-repo build; both must be deployed to test.
+
+### v2 status
+
 8. ✅ **v2 (done)**: in-browser background removal, sticker cutout (+ outline),
    shape masking, emoji/stickers, magic resize, templates gallery +
    save-as-template, custom font upload, eyedropper + recent + brand palette,

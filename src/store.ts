@@ -193,6 +193,7 @@ interface EditorState {
 
   addImageLayer: (assetId: string) => string;
   addTextLayer: () => void;
+  addTextElement: (text: string, opts?: Partial<TextLayer>) => void;
   addEmoji: (emoji: string) => void;
   addOverlayLayer: () => void;
   addShapeLayer: (shape: ShapeLayer['shape']) => void;
@@ -460,6 +461,31 @@ export const useEditor = create<EditorState>((set, get) => {
         shadow: { enabled: false, color: 'rgba(0,0,0,0.6)', blur: 8, offsetX: 0, offsetY: 2 },
         background: { enabled: false, color: 'rgba(0,0,0,0.5)', cornerRadius: 8, padding: 12 },
       } as TextLayer);
+    },
+
+    addTextElement: (text, opts = {}) => {
+      const { design } = get();
+      const layer: TextLayer = {
+        ...baseLayer('text', opts.name ?? 'Text', {
+          x: opts.x ?? design.width * 0.1,
+          y: opts.y ?? design.height * 0.4,
+          width: opts.width ?? design.width * 0.8,
+          height: opts.height ?? Math.round(design.width * 0.16),
+        }),
+        type: 'text',
+        text,
+        fontFamily: 'Inter',
+        fontSize: Math.round(design.width * 0.07),
+        fontStyle: 'bold',
+        fill: '#ffffff',
+        align: 'left',
+        lineHeight: 1.15,
+        letterSpacing: 0,
+        shadow: { enabled: false, color: 'rgba(0,0,0,0.6)', blur: 8, offsetX: 0, offsetY: 2 },
+        background: { enabled: false, color: 'rgba(0,0,0,0.5)', cornerRadius: 8, padding: 12 },
+        ...opts,
+      };
+      addLayer(layer);
     },
 
     addEmoji: (emoji) => {
