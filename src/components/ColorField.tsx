@@ -1,4 +1,5 @@
 import { useEditor } from '../store';
+import { parseColor, rgbToHex, formatColor } from '../color';
 
 /** Minimal typing for the (Chromium) EyeDropper API. */
 interface EyeDropperResult {
@@ -27,16 +28,23 @@ export function ColorField({ value, onChange }: Props) {
   const addBrandColor = useEditor((s) => s.addBrandColor);
   const removeBrandColor = useEditor((s) => s.removeBrandColor);
 
+  const rgba = parseColor(value);
+
   const pick = (color: string) => {
     onChange(color);
     pushRecentColor(color);
   };
+  const setHex = (hex: string) => {
+    const next = parseColor(hex);
+    pick(formatColor({ ...next, a: rgba.a }));
+  };
+  const setAlpha = (a: number) => pick(formatColor({ ...rgba, a }));
 
   async function eyedrop() {
     if (!window.EyeDropper) return;
     try {
       const result = await new window.EyeDropper().open();
-      pick(result.sRGBHex);
+      setHex(result.sRGBHex);
     } catch {
       /* cancelled */
     }
@@ -48,8 +56,8 @@ export function ColorField({ value, onChange }: Props) {
         <input
           type="color"
           className="h-9 flex-1 rounded-md bg-white/5"
-          value={value.startsWith('#') ? value : '#000000'}
-          onChange={(e) => pick(e.target.value)}
+          value={rgbToHex(rgba)}
+          onChange={(e) => setHex(e.target.value)}
         />
         {window.EyeDropper && (
           <button
@@ -69,6 +77,21 @@ export function ColorField({ value, onChange }: Props) {
         >
           ★
         </button>
+      </div>
+
+      {/* Alpha / opacity */}
+      <div className="mt-1.5 flex items-center gap-2">
+        <span className="w-10 text-[10px] uppercase tracking-wide text-zinc-500">Alpha</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={rgba.a}
+          className="flex-1 accent-violet-500"
+          onChange={(e) => setAlpha(Number(e.target.value))}
+        />
+        <span className="w-9 text-right text-xs text-zinc-400">{Math.round(rgba.a * 100)}%</span>
       </div>
 
       {brandColors.length > 0 && (

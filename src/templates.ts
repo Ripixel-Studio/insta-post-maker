@@ -26,6 +26,8 @@ function base(type: Layer['type'], name: string, box: { x: number; y: number; wi
     rotation: 0,
     flipX: false,
     flipY: false,
+    skewX: 0,
+    skewY: 0,
     opacity: 1,
     blendMode: 'source-over' as GlobalCompositeOperation,
     visible: true,

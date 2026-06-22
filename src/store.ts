@@ -20,7 +20,13 @@ import { nextId, getAsset } from './assets';
  * renderer never hits `undefined` after a schema change. */
 export function normalizeDesign(input: Design): Design {
   const layers = (input.layers ?? []).map((l): Layer => {
-    const base = { ...l, flipX: l.flipX ?? false, flipY: l.flipY ?? false } as Layer;
+    const base = {
+      ...l,
+      flipX: l.flipX ?? false,
+      flipY: l.flipY ?? false,
+      skewX: l.skewX ?? 0,
+      skewY: l.skewY ?? 0,
+    } as Layer;
     if (base.type === 'image') {
       const img = base as ImageLayer;
       return { ...img, filters: img.filters ?? { brightness: 0, contrast: 0, saturation: 0, blur: 0 } };
@@ -65,6 +71,8 @@ function baseLayer(
     rotation: 0,
     flipX: false,
     flipY: false,
+    skewX: 0,
+    skewY: 0,
     opacity: 1,
     blendMode: 'source-over',
     visible: true,
@@ -200,6 +208,18 @@ export const useEditor = create<EditorState>((set, get) => {
 
     applyLayout: (collage) => {
       commit((d) => {
+        // Carry existing photos into the new cells (in order); extras are
+        // dropped when the new layout has fewer cells.
+        const filled = d.collage?.cells.filter((c) => c.assetId) ?? [];
+        collage.cells.forEach((cell, i) => {
+          const src = filled[i];
+          if (src) {
+            cell.assetId = src.assetId;
+            cell.zoom = src.zoom;
+            cell.offsetX = src.offsetX;
+            cell.offsetY = src.offsetY;
+          }
+        });
         d.collage = collage;
       });
       set({ selectedCellId: null });

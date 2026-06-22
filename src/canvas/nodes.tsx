@@ -9,6 +9,7 @@ import type {
   TextLayer,
   OverlayLayer,
   ShapeLayer,
+  GradientFill,
 } from '../types';
 import { getAsset } from '../assets';
 import { useEditor } from '../store';
@@ -49,6 +50,8 @@ function centeredProps(layer: Layer) {
     rotation: layer.rotation,
     scaleX: layer.flipX ? -1 : 1,
     scaleY: layer.flipY ? -1 : 1,
+    skewX: layer.skewX,
+    skewY: layer.skewY,
     opacity: layer.opacity,
     draggable: !layer.locked,
     visible: layer.visible,
@@ -290,7 +293,7 @@ export function TextNode({ layer }: NodeProps) {
     fontFamily: t.fontFamily,
     fontSize: t.fontSize,
     fontStyle: t.fontStyle,
-    fill: t.fill,
+    ...fillProps(t, t.width, t.height),
     align: t.align,
     lineHeight: t.lineHeight,
     letterSpacing: t.letterSpacing,
@@ -346,6 +349,28 @@ export function TextNode({ layer }: NodeProps) {
       onTransformEnd={onTransformEnd}
     />
   );
+}
+
+/** Konva fill props for a layer that may carry a solid colour or a linear
+ * gradient (text / shapes). Gradient angle: 0 = left→right, 90 = top→bottom. */
+function fillProps(
+  layer: { fill: string; fillKind?: 'solid' | 'gradient'; gradient?: GradientFill },
+  w: number,
+  h: number,
+) {
+  if (layer.fillKind === 'gradient' && layer.gradient) {
+    const rad = (layer.gradient.angle * Math.PI) / 180;
+    const dx = Math.cos(rad);
+    const dy = Math.sin(rad);
+    const half = (Math.abs(dx) * w) / 2 + (Math.abs(dy) * h) / 2;
+    return {
+      fillPriority: 'linear-gradient',
+      fillLinearGradientStartPoint: { x: w / 2 - dx * half, y: h / 2 - dy * half },
+      fillLinearGradientEndPoint: { x: w / 2 + dx * half, y: h / 2 + dy * half },
+      fillLinearGradientColorStops: layer.gradient.stops.flatMap((s) => [s.offset, s.color]),
+    };
+  }
+  return { fill: layer.fill };
 }
 
 /** Map our gradient direction to Konva start/end points in the rect's
@@ -432,7 +457,7 @@ export function ShapeNode({ layer }: NodeProps) {
       {...common}
       width={s.width}
       height={s.height}
-      fill={s.fill}
+      {...fillProps(s, s.width, s.height)}
       stroke={s.strokeWidth > 0 ? s.stroke : undefined}
       strokeWidth={s.strokeWidth}
       cornerRadius={

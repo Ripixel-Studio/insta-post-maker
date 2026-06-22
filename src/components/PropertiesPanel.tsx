@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useEditor } from '../store';
 import { FONTS, uploadFont } from '../fonts';
 import { FILTER_PRESETS } from '../filters';
@@ -7,7 +7,52 @@ import { addImageAsset, getAsset } from '../assets';
 import { cutoutAsset } from '../bgRemoval';
 import { bakeOutline } from '../sticker';
 import { ColorField } from './ColorField';
-import type { MaskShape } from '../types';
+import { GradientEditor } from './GradientEditor';
+import type { MaskShape, GradientFill } from '../types';
+
+/** Solid/gradient fill control shared by text and shapes. */
+function FillEditor({
+  fill,
+  fillKind,
+  gradient,
+  onChange,
+}: {
+  fill: string;
+  fillKind?: 'solid' | 'gradient';
+  gradient?: GradientFill;
+  onChange: (patch: { fill?: string; fillKind?: 'solid' | 'gradient'; gradient?: GradientFill }) => void;
+}) {
+  const kind = fillKind ?? 'solid';
+  const grad: GradientFill = gradient ?? {
+    stops: [
+      { offset: 0, color: fill || '#ffffff' },
+      { offset: 1, color: '#7c3aed' },
+    ],
+    angle: 90,
+  };
+  return (
+    <>
+      <div className="mb-1 flex gap-1">
+        {(['solid', 'gradient'] as const).map((k) => (
+          <button
+            key={k}
+            className={`flex-1 rounded-md px-2 py-1 text-xs ${
+              kind === k ? 'bg-violet-500 text-white' : 'bg-white/5 hover:bg-white/10'
+            }`}
+            onClick={() => onChange(k === 'gradient' ? { fillKind: 'gradient', gradient: grad } : { fillKind: 'solid' })}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+      {kind === 'gradient' ? (
+        <GradientEditor value={grad} onChange={(g) => onChange({ fillKind: 'gradient', gradient: g })} />
+      ) : (
+        <ColorField value={fill} onChange={(c) => onChange({ fill: c })} />
+      )}
+    </>
+  );
+}
 import type {
   Layer,
   ImageLayer,
@@ -217,6 +262,16 @@ function CommonProps({ layer }: { layer: Layer }) {
           </button>
         </div>
       </Field>
+      <Slider label={`Skew X — ${layer.skewX.toFixed(2)}`} min={-1} max={1} step={0.01}
+        value={layer.skewX} onChange={(v) => updateLayer(layer.id, { skewX: v })} />
+      <Slider label={`Skew Y — ${layer.skewY.toFixed(2)}`} min={-1} max={1} step={0.01}
+        value={layer.skewY} onChange={(v) => updateLayer(layer.id, { skewY: v })} />
+      {(layer.skewX !== 0 || layer.skewY !== 0) && (
+        <button className="mb-3 w-full rounded-md bg-white/5 px-2 py-1 text-xs hover:bg-white/10"
+          onClick={() => updateLayer(layer.id, { skewX: 0, skewY: 0 })}>
+          Reset skew
+        </button>
+      )}
     </>
   );
 }
@@ -477,15 +532,14 @@ function TextProps({ layer }: { layer: TextLayer }) {
             onChange={(e) => { void onFontFile(e.target.files?.[0]); e.target.value = ''; }} />
         </div>
       </Field>
-      <div className="flex gap-2">
-        <Field label="Size">
-          <input type="number" className={inputCls} value={layer.fontSize}
-            onChange={(e) => patch({ fontSize: Number(e.target.value) })} />
-        </Field>
-        <Field label="Color">
-          <ColorField value={layer.fill} onChange={(c) => patch({ fill: c })} />
-        </Field>
-      </div>
+      <Field label="Size">
+        <input type="number" className={inputCls} value={layer.fontSize}
+          onChange={(e) => patch({ fontSize: Number(e.target.value) })} />
+      </Field>
+      <Field label="Fill">
+        <FillEditor fill={layer.fill} fillKind={layer.fillKind} gradient={layer.gradient}
+          onChange={patch} />
+      </Field>
       <Field label="Align">
         <div className="flex gap-1">
           {(['left', 'center', 'right'] as const).map((a) => (
@@ -520,17 +574,16 @@ function TextProps({ layer }: { layer: TextLayer }) {
           onChange={(e) => patch({ shadow: { ...layer.shadow, enabled: e.target.checked } })} />
       </div>
       {layer.shadow.enabled && (
-        <div className="flex gap-2">
-          <Field label="Color">
-            <input type="color" className="h-9 w-full rounded-md bg-white/5"
-              value={layer.shadow.color.startsWith('#') ? layer.shadow.color : '#000000'}
-              onChange={(e) => patch({ shadow: { ...layer.shadow, color: e.target.value } })} />
+        <>
+          <Field label="Shadow color">
+            <ColorField value={layer.shadow.color}
+              onChange={(c) => patch({ shadow: { ...layer.shadow, color: c } })} />
           </Field>
-          <Field label="Blur">
+          <Field label="Shadow blur">
             <input type="number" className={inputCls} value={layer.shadow.blur}
               onChange={(e) => patch({ shadow: { ...layer.shadow, blur: Number(e.target.value) } })} />
           </Field>
-        </div>
+        </>
       )}
 
       {/* Background pill */}
@@ -541,17 +594,14 @@ function TextProps({ layer }: { layer: TextLayer }) {
       </div>
       {layer.background.enabled && (
         <>
-          <div className="flex gap-2">
-            <Field label="Color">
-              <input type="color" className="h-9 w-full rounded-md bg-white/5"
-                value={layer.background.color.startsWith('#') ? layer.background.color : '#000000'}
-                onChange={(e) => patch({ background: { ...layer.background, color: e.target.value } })} />
-            </Field>
-            <Field label="Radius">
-              <input type="number" className={inputCls} value={layer.background.cornerRadius}
-                onChange={(e) => patch({ background: { ...layer.background, cornerRadius: Number(e.target.value) } })} />
-            </Field>
-          </div>
+          <Field label="Background color">
+            <ColorField value={layer.background.color}
+              onChange={(c) => patch({ background: { ...layer.background, color: c } })} />
+          </Field>
+          <Field label="Corner radius">
+            <input type="number" className={inputCls} value={layer.background.cornerRadius}
+              onChange={(e) => patch({ background: { ...layer.background, cornerRadius: Number(e.target.value) } })} />
+          </Field>
           <Slider label={`Padding — ${layer.background.padding}px`} min={0} max={80} step={1}
             value={layer.background.padding}
             onChange={(v) => patch({ background: { ...layer.background, padding: v } })} />
@@ -579,13 +629,13 @@ function OverlayProps({ layer }: { layer: OverlayLayer }) {
         </select>
       </Field>
       <Field label="Gradient stops">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {layer.stops.map((s, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input type="color" className="h-8 w-12 rounded bg-white/5"
-                value={s.color.startsWith('#') ? s.color : '#000000'}
-                onChange={(e) => setStop(i, e.target.value)} />
-              <span className="text-xs text-zinc-400">offset {s.offset}</span>
+            <div key={i}>
+              <span className="mb-1 block text-[10px] uppercase tracking-wide text-zinc-500">
+                Stop {i + 1} (offset {s.offset})
+              </span>
+              <ColorField value={s.color} onChange={(c) => setStop(i, c)} />
             </div>
           ))}
         </div>
@@ -607,7 +657,8 @@ function ShapeProps({ layer }: { layer: ShapeLayer }) {
       {layer.shape !== 'line' && (
         <>
           <Field label="Fill">
-            <ColorField value={layer.fill} onChange={(c) => patch({ fill: c })} />
+            <FillEditor fill={layer.fill} fillKind={layer.fillKind} gradient={layer.gradient}
+              onChange={patch} />
           </Field>
           {layer.shape === 'rect' && (
             <Field label="Corner radius">
@@ -813,16 +864,9 @@ export function PropertiesPanel() {
   const sheetOpen = useEditor((s) => s.sheetOpen);
   const setSheetOpen = useEditor((s) => s.setSheetOpen);
 
-  // On mobile, slide the sheet up automatically when the selection changes to a
-  // new layer/cell. Done via a store subscription (an event), not a render-time
-  // effect, so it only fires on real selection changes.
-  useEffect(() => {
-    return useEditor.subscribe((s, p) => {
-      const newLayer = s.selectedId && s.selectedId !== p.selectedId;
-      const newCell = s.selectedCellId && s.selectedCellId !== p.selectedCellId;
-      if (newLayer || newCell) s.setSheetOpen(true);
-    });
-  }, []);
+  // The mobile sheet opens only via the "Edit" button (below) — selecting a
+  // layer no longer pops it up, so you can freely move things on the canvas
+  // without it shrinking out from under you.
 
   return (
     <>

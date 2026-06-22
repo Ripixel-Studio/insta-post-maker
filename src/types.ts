@@ -11,6 +11,13 @@
 
 export type LayerType = 'image' | 'text' | 'overlay' | 'shape';
 
+/** A linear gradient fill (used by text and shapes). */
+export interface GradientFill {
+  stops: { offset: number; color: string }[];
+  /** Direction in degrees (0 = left→right, 90 = top→bottom). */
+  angle: number;
+}
+
 /** Shared transform/appearance properties on every layer. */
 export interface BaseLayer {
   id: string;
@@ -23,6 +30,9 @@ export interface BaseLayer {
   rotation: number;
   flipX: boolean;
   flipY: boolean;
+  /** Skew factors (≈ tan of the skew angle); 0 = none, 1 ≈ 45°. */
+  skewX: number;
+  skewY: number;
   opacity: number;
   /** Konva globalCompositeOperation, e.g. 'multiply', 'screen'. */
   blendMode: GlobalCompositeOperation;
@@ -104,6 +114,8 @@ export interface TextLayer extends BaseLayer {
   fontSize: number;
   fontStyle: 'normal' | 'bold' | 'italic' | 'italic bold';
   fill: string;
+  fillKind?: 'solid' | 'gradient';
+  gradient?: GradientFill;
   align: 'left' | 'center' | 'right';
   lineHeight: number;
   letterSpacing: number;
@@ -130,6 +142,8 @@ export interface ShapeLayer extends BaseLayer {
   type: 'shape';
   shape: 'rect' | 'ellipse' | 'line';
   fill: string;
+  fillKind?: 'solid' | 'gradient';
+  gradient?: GradientFill;
   stroke: string;
   strokeWidth: number;
   cornerRadius: number;
