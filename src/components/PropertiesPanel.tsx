@@ -4,7 +4,7 @@ import { FONTS, uploadFont } from '../fonts';
 import { FILTER_PRESETS } from '../filters';
 import { PRESETS } from '../presets';
 import { addImageAsset, getAsset } from '../assets';
-import { cutoutAsset } from '../bgRemoval';
+import { cutoutAsset, portraitBlur } from '../bgRemoval';
 import { bakeOutline } from '../sticker';
 import { ColorField } from './ColorField';
 import { GradientEditor } from './GradientEditor';
@@ -303,9 +303,24 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
   const addImageLayer = useEditor((s) => s.addImageLayer);
   const setCropTarget = useEditor((s) => s.setCropTarget);
+  const setEraseTarget = useEditor((s) => s.setEraseTarget);
   const design = useEditor((s) => s.design);
   const [bgProgress, setBgProgress] = useState<number | null>(null);
   const [stickerBusy, setStickerBusy] = useState(false);
+  const [blurStrength, setBlurStrength] = useState(18);
+
+  async function applyPortraitBlur() {
+    setBgProgress(0);
+    try {
+      const newId = await portraitBlur(layer.assetId, blurStrength, (r) => setBgProgress(r));
+      if (newId) updateLayer(layer.id, { assetId: newId });
+    } catch (err) {
+      console.error(err);
+      alert('Portrait blur failed. It needs a connection the first time.');
+    } finally {
+      setBgProgress(null);
+    }
+  }
   const f = layer.filters;
   const isSticker = !!layer.baseAssetId;
   const setFilter = (patch: Partial<ImageLayer['filters']>) =>
@@ -416,6 +431,13 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
             </button>
           )}
         </div>
+        <button
+          className="mt-1 w-full rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+          onClick={() => setEraseTarget(layer.id)}
+          title="Paint to erase parts of the image (great for cleaning up cutouts)"
+        >
+          🧽 Erase / refine
+        </button>
       </Field>
 
       <Field label="Cut out subject">
@@ -436,6 +458,20 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
             🪄 Remove bg
           </button>
         </div>
+      </Field>
+
+      <Field label={`Portrait blur — ${blurStrength}`}>
+        <input type="range" min={4} max={50} step={1} value={blurStrength}
+          className="w-full accent-violet-500"
+          onChange={(e) => setBlurStrength(Number(e.target.value))} />
+        <button
+          className="mt-1 w-full rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10 disabled:opacity-60"
+          onClick={applyPortraitBlur}
+          disabled={bgProgress !== null}
+          title="Keep the subject sharp and blur the background (fake depth of field)"
+        >
+          {bgProgress !== null ? `Working… ${Math.round(bgProgress * 100)}%` : '📷 Apply portrait blur'}
+        </button>
       </Field>
 
       {isSticker && (

@@ -27,10 +27,14 @@ export function useShortcuts() {
         editingTextId,
       } = state;
 
-      // In crop mode, only allow Escape (cancel); swallow everything else so we
-      // don't e.g. delete the image being cropped.
+      // In crop/erase mode, only allow Escape (cancel); swallow everything else
+      // so we don't e.g. delete the image being edited.
       if (cropTargetId) {
         if (e.key === 'Escape') setCropTarget(null);
+        return;
+      }
+      if (state.eraseTargetId) {
+        if (e.key === 'Escape') state.setEraseTarget(null);
         return;
       }
       if (editingTextId) return;

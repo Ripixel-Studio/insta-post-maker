@@ -3,6 +3,7 @@ import { Toolbar } from './components/Toolbar';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { PageBar } from './components/PageBar';
 import { PagesOverview } from './components/PagesOverview';
+import { EraseOverlay } from './components/EraseOverlay';
 import { CanvasStage } from './canvas/CanvasStage';
 import { useShortcuts } from './useShortcuts';
 import { usePersistence } from './usePersistence';
@@ -79,6 +80,7 @@ export default function App() {
         </main>
         <PropertiesPanel />
       </div>
+      <EraseOverlay />
     </div>
   );
 }

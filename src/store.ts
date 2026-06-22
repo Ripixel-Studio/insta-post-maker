@@ -142,6 +142,7 @@ interface EditorState {
   future: Design[];
 
   cropTargetId: string | null;
+  eraseTargetId: string | null;
   editingTextId: string | null;
   selectedCellId: string | null;
   sheetOpen: boolean;
@@ -150,6 +151,7 @@ interface EditorState {
   viewAll: boolean;
   setViewAll: (v: boolean) => void;
   setCropTarget: (id: string | null) => void;
+  setEraseTarget: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
   selectCell: (id: string | null) => void;
 
@@ -236,6 +238,7 @@ export const useEditor = create<EditorState>((set, get) => {
     future: [],
 
     cropTargetId: null,
+    eraseTargetId: null,
     editingTextId: null,
     selectedCellId: null,
     sheetOpen: false,
@@ -243,6 +246,7 @@ export const useEditor = create<EditorState>((set, get) => {
     viewAll: false,
     setViewAll: (v) => set({ viewAll: v }),
     setCropTarget: (id) => set({ cropTargetId: id }),
+    setEraseTarget: (id) => set({ eraseTargetId: id }),
     setEditingText: (id) => set({ editingTextId: id }),
     selectCell: (id) => set({ selectedCellId: id, selectedId: null }),
 
