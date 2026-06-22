@@ -9,6 +9,7 @@ import type {
   TextLayer,
   OverlayLayer,
   ShapeLayer,
+  DrawLayer,
   CanvasPreset,
   Collage,
   CollageCell,
@@ -150,6 +151,14 @@ interface EditorState {
   /** Show all pages side-by-side (overview) instead of editing one. */
   viewAll: boolean;
   setViewAll: (v: boolean) => void;
+  /** Freehand pen tool. */
+  drawMode: boolean;
+  drawColor: string;
+  drawWidth: number;
+  setDrawMode: (v: boolean) => void;
+  setDrawColor: (c: string) => void;
+  setDrawWidth: (w: number) => void;
+  addDrawLayer: (absPoints: number[]) => void;
   setCropTarget: (id: string | null) => void;
   setEraseTarget: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
@@ -246,6 +255,43 @@ export const useEditor = create<EditorState>((set, get) => {
     setSheetOpen: (open) => set({ sheetOpen: open }),
     viewAll: false,
     setViewAll: (v) => set({ viewAll: v }),
+    drawMode: false,
+    drawColor: '#ffd400',
+    drawWidth: 12,
+    setDrawMode: (v) => set({ drawMode: v, selectedId: v ? null : get().selectedId }),
+    setDrawColor: (c) => set({ drawColor: c }),
+    setDrawWidth: (w) => set({ drawWidth: w }),
+
+    addDrawLayer: (absPoints) => {
+      if (absPoints.length < 4) return;
+      const { drawColor, drawWidth } = get();
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (let i = 0; i < absPoints.length; i += 2) {
+        minX = Math.min(minX, absPoints[i]);
+        maxX = Math.max(maxX, absPoints[i]);
+        minY = Math.min(minY, absPoints[i + 1]);
+        maxY = Math.max(maxY, absPoints[i + 1]);
+      }
+      const points = absPoints.map((v, i) => (i % 2 === 0 ? v - minX : v - minY));
+      const layer: DrawLayer = {
+        ...baseLayer('draw', 'Drawing', {
+          x: minX,
+          y: minY,
+          width: Math.max(1, maxX - minX),
+          height: Math.max(1, maxY - minY),
+        }),
+        type: 'draw',
+        points,
+        stroke: drawColor,
+        strokeWidth: drawWidth,
+        tension: 0.4,
+      };
+      commit((_d, page) => void page.layers.push(layer));
+      // Stay in draw mode for multiple strokes; don't select.
+    },
     setCropTarget: (id) => set({ cropTargetId: id }),
     setEraseTarget: (id) => set({ eraseTargetId: id }),
     setEditingText: (id) => set({ editingTextId: id }),

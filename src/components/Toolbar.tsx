@@ -19,6 +19,7 @@ import { EmojiPicker } from './EmojiPicker';
 import { AddMenu } from './AddMenu';
 import { HelpOverlay } from './HelpOverlay';
 import { LAYOUTS } from '../collage';
+import { promptAddQrCode } from '../qr';
 
 function btn(active = false) {
   return [
@@ -38,6 +39,8 @@ export function Toolbar() {
   const addShapeLayer = useEditor((s) => s.addShapeLayer);
   const applyLayout = useEditor((s) => s.applyLayout);
   const clearCollage = useEditor((s) => s.clearCollage);
+  const drawMode = useEditor((s) => s.drawMode);
+  const setDrawMode = useEditor((s) => s.setDrawMode);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
   const canUndo = useEditor((s) => s.past.length > 0);
@@ -168,6 +171,12 @@ export function Toolbar() {
         </button>
         <button className={btn()} onClick={addOverlayLayer}>
           + Gradient
+        </button>
+        <button className={btn(drawMode)} onClick={() => setDrawMode(!drawMode)} title="Freehand pen">
+          ✏️ Draw
+        </button>
+        <button className={btn()} onClick={() => void promptAddQrCode()} title="Add a QR code">
+          ▦ QR
         </button>
         <select
           className="rounded-md bg-white/5 px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/10"

@@ -9,6 +9,7 @@ import type {
   TextLayer,
   OverlayLayer,
   ShapeLayer,
+  DrawLayer,
   GradientFill,
 } from '../types';
 import { getAsset } from '../assets';
@@ -98,6 +99,12 @@ function useCommonHandlers(layer: Layer, onChange: (patch: Partial<Layer>) => vo
       (patch as Partial<TextLayer>).fontSize = Math.max(
         4,
         Math.round((layer as TextLayer).fontSize * Math.abs(sy)),
+      );
+    }
+    if (layer.type === 'draw') {
+      const dl = layer as DrawLayer;
+      (patch as Partial<DrawLayer>).points = dl.points.map((v, i) =>
+        i % 2 === 0 ? v * Math.abs(sx) : v * Math.abs(sy),
       );
     }
     onChange(patch);
@@ -548,6 +555,28 @@ export function ShapeNode({ layer }: NodeProps) {
  * shallow prop comparison (layer ref + isSelected) skips everything else —
  * turning an N-layer redraw per interaction frame into a 1-layer redraw.
  */
+export function DrawNode({ layer }: NodeProps) {
+  const d = layer as DrawLayer;
+  const { onSelect, onChange } = useNodeActions(layer);
+  const { onDragEnd, onTransformEnd } = useCommonHandlers(layer, onChange);
+  return (
+    <Line
+      {...centeredProps(layer)}
+      points={d.points}
+      stroke={d.stroke}
+      strokeWidth={d.strokeWidth}
+      tension={d.tension}
+      lineCap="round"
+      lineJoin="round"
+      hitStrokeWidth={Math.max(16, d.strokeWidth)}
+      onMouseDown={onSelect}
+      onTap={onSelect}
+      onDragEnd={onDragEnd}
+      onTransformEnd={onTransformEnd}
+    />
+  );
+}
+
 export const LayerNode = memo(function LayerNode(props: NodeProps) {
   switch (props.layer.type) {
     case 'image':
@@ -558,6 +587,8 @@ export const LayerNode = memo(function LayerNode(props: NodeProps) {
       return <OverlayNode {...props} />;
     case 'shape':
       return <ShapeNode {...props} />;
+    case 'draw':
+      return <DrawNode {...props} />;
     default:
       return null;
   }

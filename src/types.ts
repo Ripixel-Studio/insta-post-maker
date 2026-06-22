@@ -9,7 +9,7 @@
  * the box CENTRE; flipX/flipY mirror about the centre.
  */
 
-export type LayerType = 'image' | 'text' | 'overlay' | 'shape';
+export type LayerType = 'image' | 'text' | 'overlay' | 'shape' | 'draw';
 
 /** A linear gradient fill (used by text and shapes). */
 export interface GradientFill {
@@ -158,7 +158,16 @@ export interface ShapeLayer extends BaseLayer {
   cornerRadius: number;
 }
 
-export type Layer = ImageLayer | TextLayer | OverlayLayer | ShapeLayer;
+/** A freehand pen stroke. `points` are [x,y,x,y…] relative to the layer box. */
+export interface DrawLayer extends BaseLayer {
+  type: 'draw';
+  points: number[];
+  stroke: string;
+  strokeWidth: number;
+  tension: number;
+}
+
+export type Layer = ImageLayer | TextLayer | OverlayLayer | ShapeLayer | DrawLayer;
 
 /** One image frame in a collage, spanning grid tracks [c0..c1] × [r0..r1].
  * The image fills the cell (cover-fit) and can be panned (offset 0..1) and

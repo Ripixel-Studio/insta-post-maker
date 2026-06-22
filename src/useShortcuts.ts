@@ -37,6 +37,10 @@ export function useShortcuts() {
         if (e.key === 'Escape') state.setEraseTarget(null);
         return;
       }
+      if (state.drawMode) {
+        if (e.key === 'Escape') state.setDrawMode(false);
+        return;
+      }
       if (editingTextId) return;
 
       const meta = e.metaKey || e.ctrlKey;

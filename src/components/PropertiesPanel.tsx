@@ -8,7 +8,7 @@ import { cutoutAsset, portraitBlur } from '../bgRemoval';
 import { bakeOutline } from '../sticker';
 import { ColorField } from './ColorField';
 import { GradientEditor } from './GradientEditor';
-import type { MaskShape, GradientFill } from '../types';
+import type { MaskShape, GradientFill, DrawLayer } from '../types';
 
 /** Solid/gradient fill control shared by text and shapes. */
 function FillEditor({
@@ -242,8 +242,19 @@ function LayersList() {
 function CommonProps({ layer }: { layer: Layer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
   const flipLayer = useEditor((s) => s.flipLayer);
+  const design = useEditor((s) => s.design);
+  const centerH = () => updateLayer(layer.id, { x: (design.width - layer.width) / 2 });
+  const centerV = () => updateLayer(layer.id, { y: (design.height - layer.height) / 2 });
   return (
     <>
+      <Field label="Center on canvas">
+        <div className="flex gap-1">
+          <button className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+            onClick={centerH}>↔ Horizontal</button>
+          <button className="flex-1 rounded-md bg-white/5 px-2 py-1.5 text-sm hover:bg-white/10"
+            onClick={centerV}>↕ Vertical</button>
+        </div>
+      </Field>
       <Slider
         label={`Opacity — ${Math.round(layer.opacity * 100)}%`}
         min={0}
@@ -939,6 +950,23 @@ function LayoutPanel() {
   );
 }
 
+/* -------------------------------- Draw --------------------------------- */
+
+function DrawProps({ layer }: { layer: DrawLayer }) {
+  const updateLayer = useEditor((s) => s.updateLayer);
+  return (
+    <>
+      <Field label="Stroke colour">
+        <ColorField value={layer.stroke} onChange={(c) => updateLayer(layer.id, { stroke: c })} />
+      </Field>
+      <Slider label={`Thickness — ${layer.strokeWidth}`} min={1} max={80} step={1}
+        value={layer.strokeWidth} onChange={(v) => updateLayer(layer.id, { strokeWidth: v })} />
+      <Slider label={`Smoothing — ${layer.tension.toFixed(2)}`} min={0} max={1} step={0.05}
+        value={layer.tension} onChange={(v) => updateLayer(layer.id, { tension: v })} />
+    </>
+  );
+}
+
 /* ----------------------------- Canvas panel ----------------------------- */
 
 function CanvasProps() {
@@ -1029,6 +1057,7 @@ function PanelContent() {
           {layer.type === 'text' && <TextProps layer={layer as TextLayer} />}
           {layer.type === 'overlay' && <OverlayProps layer={layer as OverlayLayer} />}
           {layer.type === 'shape' && <ShapeProps layer={layer as ShapeLayer} />}
+          {layer.type === 'draw' && <DrawProps layer={layer as DrawLayer} />}
         </div>
       )}
 

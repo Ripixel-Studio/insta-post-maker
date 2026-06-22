@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useEditor, activePage } from '../store';
 import { LAYOUTS } from '../collage';
+import { promptAddQrCode } from '../qr';
 
 /** Compact "+ Add" dropdown used on small screens in place of the inline row
  * of insert buttons. */
@@ -16,6 +17,7 @@ export function AddMenu({
   const addShapeLayer = useEditor((s) => s.addShapeLayer);
   const applyLayout = useEditor((s) => s.applyLayout);
   const clearCollage = useEditor((s) => s.clearCollage);
+  const setDrawMode = useEditor((s) => s.setDrawMode);
   const hasCollage = useEditor((s) => !!activePage(s).collage);
   const [open, setOpen] = useState(false);
 
@@ -41,6 +43,8 @@ export function AddMenu({
           <button className={item} onClick={run(() => addShapeLayer('rect'))}>▭ Rectangle</button>
           <button className={item} onClick={run(() => addShapeLayer('ellipse'))}>◯ Ellipse</button>
           <button className={item} onClick={run(() => addShapeLayer('line'))}>／ Line</button>
+          <button className={item} onClick={run(() => setDrawMode(true))}>✏️ Draw</button>
+          <button className={item} onClick={run(() => void promptAddQrCode())}>▦ QR code</button>
           <div className="my-1 h-px bg-white/10" />
           <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">Collage</p>
           {LAYOUTS.map((l) => (

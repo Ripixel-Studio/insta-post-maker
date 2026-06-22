@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Stage, Layer as KonvaLayer, Rect, Transformer } from 'react-konva';
+import { Stage, Layer as KonvaLayer, Rect, Line, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import { useEditor, activePage, combinedLayers } from '../store';
 import { LayerNode } from './nodes';
@@ -40,6 +40,13 @@ export function CanvasStage() {
   const setEditingText = useEditor((s) => s.setEditingText);
   const selectCell = useEditor((s) => s.selectCell);
   const updateCell = useEditor((s) => s.updateCell);
+  const drawMode = useEditor((s) => s.drawMode);
+  const drawColor = useEditor((s) => s.drawColor);
+  const drawWidth = useEditor((s) => s.drawWidth);
+  const setDrawMode = useEditor((s) => s.setDrawMode);
+  const setDrawColor = useEditor((s) => s.setDrawColor);
+  const setDrawWidth = useEditor((s) => s.setDrawWidth);
+  const addDrawLayer = useEditor((s) => s.addDrawLayer);
 
   // Page layers (bottom) + shared layers (on top).
   const renderLayers = [...pageLayers, ...sharedLayers];
@@ -50,8 +57,41 @@ export function CanvasStage() {
   const fillInputRef = useRef<HTMLInputElement>(null);
   const pendingCellRef = useRef<string | null>(null);
   const gestureRef = useRef<{ dist: number; angle: number } | null>(null);
+  const drawingRef = useRef<number[] | null>(null);
+  const [preview, setPreview] = useState<number[] | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [guides, setGuides] = useState<Guide[]>([]);
+
+  // Freehand pen handlers. Points come from the stage in document coordinates.
+  function drawDown(e: Konva.KonvaEventObject<MouseEvent | TouchEvent>): boolean {
+    if (!drawMode) return false;
+    const p = stageRef.current?.getRelativePointerPosition();
+    if (p) {
+      drawingRef.current = [p.x, p.y];
+      setPreview([p.x, p.y]);
+    }
+    e.evt.preventDefault?.();
+    return true;
+  }
+  function drawMoveEvt(e: Konva.KonvaEventObject<MouseEvent | TouchEvent>): boolean {
+    if (!drawMode || !drawingRef.current) return false;
+    const p = stageRef.current?.getRelativePointerPosition();
+    if (p) {
+      drawingRef.current.push(p.x, p.y);
+      setPreview([...drawingRef.current]);
+    }
+    e.evt.preventDefault?.();
+    return true;
+  }
+  function drawUp(): boolean {
+    if (!drawMode) return false;
+    if (drawingRef.current) {
+      addDrawLayer(drawingRef.current);
+      drawingRef.current = null;
+      setPreview(null);
+    }
+    return true;
+  }
 
   // Two-finger pinch-to-scale + twist-to-rotate on the selected layer — much
   // easier than the small transformer handles on a touch screen.
@@ -204,7 +244,9 @@ export function CanvasStage() {
   return (
     <div
       ref={containerRef}
-      className="canvas-surface relative flex h-full w-full items-center justify-center overflow-hidden"
+      className={`canvas-surface relative flex h-full w-full items-center justify-center overflow-hidden ${
+        drawMode ? 'cursor-crosshair' : ''
+      }`}
     >
       <input
         ref={fillInputRef}
@@ -224,13 +266,23 @@ export function CanvasStage() {
             height={stageHeight}
             scaleX={scale}
             scaleY={scale}
-            onMouseDown={onBackgroundClick}
+            onMouseDown={(e) => {
+              if (drawDown(e)) return;
+              onBackgroundClick(e);
+            }}
+            onMouseMove={drawMoveEvt}
+            onMouseUp={drawUp}
             onTouchStart={(e) => {
+              if (drawDown(e)) return;
               onBackgroundClick(e);
               onSwipeStart(e);
             }}
-            onTouchMove={onStageTouchMove}
+            onTouchMove={(e) => {
+              if (drawMoveEvt(e)) return;
+              onStageTouchMove(e);
+            }}
             onTouchEnd={(e) => {
+              if (drawUp()) return;
               onStageTouchEnd(e);
               onSwipeEnd(e);
             }}
@@ -274,6 +326,18 @@ export function CanvasStage() {
                   designWidth={design.width}
                   designHeight={design.height}
                   onCommit={commitCrop}
+                />
+              )}
+
+              {preview && preview.length >= 2 && (
+                <Line
+                  points={preview}
+                  stroke={drawColor}
+                  strokeWidth={drawWidth}
+                  tension={0.4}
+                  lineCap="round"
+                  lineJoin="round"
+                  listening={false}
                 />
               )}
 
@@ -326,6 +390,35 @@ export function CanvasStage() {
               }}
             />
           )}
+        </div>
+      )}
+
+      {/* Draw-mode floating toolbar. */}
+      {drawMode && (
+        <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-white/10 bg-[#14161b] px-3 py-2 shadow-2xl">
+          <span className="text-xs uppercase tracking-wide text-zinc-400">✏️ Draw</span>
+          <input
+            type="color"
+            className="h-8 w-9 rounded bg-white/5"
+            value={drawColor.startsWith('#') ? drawColor : '#ffd400'}
+            onChange={(e) => setDrawColor(e.target.value)}
+          />
+          <input
+            type="range"
+            min={2}
+            max={60}
+            step={1}
+            value={drawWidth}
+            className="accent-violet-500"
+            onChange={(e) => setDrawWidth(Number(e.target.value))}
+          />
+          <span className="w-6 text-right text-xs text-zinc-400">{drawWidth}</span>
+          <button
+            className="rounded-md bg-violet-500 px-3 py-1 text-sm font-semibold hover:bg-violet-400"
+            onClick={() => setDrawMode(false)}
+          >
+            Done
+          </button>
         </div>
       )}
 
