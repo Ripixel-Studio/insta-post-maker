@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Toolbar } from './components/Toolbar';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { PageBar } from './components/PageBar';
+import { PagesOverview } from './components/PagesOverview';
 import { CanvasStage } from './canvas/CanvasStage';
 import { useShortcuts } from './useShortcuts';
 import { usePersistence } from './usePersistence';
@@ -14,6 +15,7 @@ export default function App() {
   usePersistence();
   const addImageLayer = useEditor((s) => s.addImageLayer);
   const sheetOpen = useEditor((s) => s.sheetOpen);
+  const viewAll = useEditor((s) => s.viewAll);
 
   useEffect(() => {
     loadFonts();
@@ -69,10 +71,10 @@ export default function App() {
               to sit above it (no-op on desktop, where the sheet isn't used). */}
           <div
             className={`min-h-0 flex-1 transition-[padding] duration-200 md:pb-0 ${
-              sheetOpen ? 'pb-[55vh]' : 'pb-0'
+              sheetOpen && !viewAll ? 'pb-[55vh]' : 'pb-0'
             }`}
           >
-            <CanvasStage />
+            {viewAll ? <PagesOverview /> : <CanvasStage />}
           </div>
         </main>
         <PropertiesPanel />

@@ -146,6 +146,9 @@ interface EditorState {
   selectedCellId: string | null;
   sheetOpen: boolean;
   setSheetOpen: (open: boolean) => void;
+  /** Show all pages side-by-side (overview) instead of editing one. */
+  viewAll: boolean;
+  setViewAll: (v: boolean) => void;
   setCropTarget: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
   selectCell: (id: string | null) => void;
@@ -237,6 +240,8 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedCellId: null,
     sheetOpen: false,
     setSheetOpen: (open) => set({ sheetOpen: open }),
+    viewAll: false,
+    setViewAll: (v) => set({ viewAll: v }),
     setCropTarget: (id) => set({ cropTargetId: id }),
     setEditingText: (id) => set({ editingTextId: id }),
     selectCell: (id) => set({ selectedCellId: id, selectedId: null }),
