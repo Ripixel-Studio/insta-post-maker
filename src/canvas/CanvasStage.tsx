@@ -14,6 +14,11 @@ import type { Layer, ImageLayer, TextLayer, CropRect } from '../types';
 /** Padding (px) around the canvas inside its viewport container. */
 const VIEWPORT_PADDING = 48;
 
+/** Bigger transform handles on touch screens. */
+const IS_TOUCH =
+  typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+const ANCHOR_SIZE = IS_TOUCH ? 20 : 10;
+
 const ASPECTS: { label: string; ratio: number | null }[] = [
   { label: 'Free', ratio: null },
   { label: '1:1', ratio: 1 },
@@ -347,7 +352,7 @@ export function CanvasStage() {
                 ref={transformerRef}
                 rotateEnabled
                 keepRatio={false}
-                anchorSize={10}
+                anchorSize={ANCHOR_SIZE}
                 borderStroke="#c084fc"
                 anchorStroke="#c084fc"
                 anchorFill="#1b1d22"

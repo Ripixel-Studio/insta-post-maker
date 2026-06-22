@@ -4,6 +4,7 @@ import { PropertiesPanel } from './components/PropertiesPanel';
 import { PageBar } from './components/PageBar';
 import { PagesOverview } from './components/PagesOverview';
 import { EraseOverlay } from './components/EraseOverlay';
+import { MobileShell } from './components/MobileShell';
 import { CanvasStage } from './canvas/CanvasStage';
 import { useShortcuts } from './useShortcuts';
 import { usePersistence } from './usePersistence';
@@ -60,23 +61,29 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <Toolbar />
+      {/* Desktop toolbar (mobile uses the floating shell instead). */}
+      <div className="hidden md:block">
+        <Toolbar />
+      </div>
       <div
         className="flex min-h-0 flex-1"
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       >
-        <main className="flex min-w-0 flex-1 flex-col bg-[#0b0d10]">
-          <PageBar />
-          {/* On mobile, reserve space for the bottom sheet so the canvas shrinks
-              to sit above it (no-op on desktop, where the sheet isn't used). */}
+        <main className="relative flex min-w-0 flex-1 flex-col bg-[#0b0d10]">
+          <div className="hidden md:block">
+            <PageBar />
+          </div>
+          {/* Mobile: canvas goes ~full-screen with floating controls; reserve a
+              little top/bottom for the floating bars (or the edit sheet). */}
           <div
-            className={`min-h-0 flex-1 transition-[padding] duration-200 md:pb-0 ${
-              sheetOpen && !viewAll ? 'pb-[55vh]' : 'pb-0'
+            className={`min-h-0 flex-1 transition-[padding] duration-200 md:!p-0 ${
+              viewAll ? 'pb-0' : sheetOpen ? 'pb-[55vh] pt-14' : 'pb-20 pt-14'
             }`}
           >
             {viewAll ? <PagesOverview /> : <CanvasStage />}
           </div>
+          {!viewAll && <MobileShell />}
         </main>
         <PropertiesPanel />
       </div>

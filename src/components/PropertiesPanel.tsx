@@ -1143,16 +1143,6 @@ export function PropertiesPanel() {
         <PanelContent />
       </aside>
 
-      {/* Mobile: floating button to open the edit sheet */}
-      {!sheetOpen && (
-        <button
-          className="fixed bottom-4 right-4 z-20 rounded-full bg-violet-500 px-5 py-3 text-sm font-semibold text-white shadow-2xl md:hidden"
-          onClick={() => setSheetOpen(true)}
-        >
-          Edit ⚙
-        </button>
-      )}
-
       {/* Mobile: bottom sheet (fixed height so the canvas can reserve space) */}
       <div
         className={`fixed inset-x-0 bottom-0 z-30 flex h-[55vh] flex-col rounded-t-2xl border-t border-white/10 bg-[#14161b] shadow-2xl transition-transform duration-200 md:hidden ${
