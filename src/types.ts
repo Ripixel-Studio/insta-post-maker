@@ -38,6 +38,9 @@ export interface BaseLayer {
   blendMode: GlobalCompositeOperation;
   visible: boolean;
   locked: boolean;
+  /** Reveal step for the layer-by-layer animation. Layers sharing a step
+   * animate in together. Undefined = auto (its paint-order position). */
+  animStep?: number;
 }
 
 /** Per-image colour adjustments (applied via cached Konva filters). */

@@ -10,7 +10,8 @@ import {
   canShareFiles,
   type ExportFormat,
 } from '../export';
-import { exportMotion, canRecordVideo } from '../motion';
+import { canRecordVideo } from '../motion';
+import { AnimateMenu } from './AnimateMenu';
 import { ProjectsMenu } from './ProjectsMenu';
 import { TemplatesMenu } from './TemplatesMenu';
 import { EmojiPicker } from './EmojiPicker';
@@ -86,19 +87,6 @@ export function Toolbar() {
         const { blob, name } = await build();
         downloadBlob(blob, name);
       }
-    } catch (err) {
-      console.error(err);
-      alert((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleAnimate() {
-    setBusy(true);
-    try {
-      const { blob, ext } = await exportMotion(design);
-      downloadBlob(blob, `${activePreset?.id ?? 'design'}-motion.${ext}`);
     } catch (err) {
       console.error(err);
       alert((err as Error).message);
@@ -257,16 +245,7 @@ export function Toolbar() {
         >
           {busy ? 'Working…' : 'Export'}
         </button>
-        {canRecordVideo() && (
-          <button
-            className="hidden rounded-md bg-white/5 px-3 py-1.5 text-sm font-semibold text-zinc-100 hover:bg-white/10 disabled:opacity-50 md:inline-flex"
-            onClick={handleAnimate}
-            disabled={busy}
-            title="Export a short Ken Burns motion clip (MP4/WebM)"
-          >
-            🎬 Animate
-          </button>
-        )}
+        {canRecordVideo() && <AnimateMenu />}
         {canShareFiles() && (
           <button
             className="rounded-md bg-white/5 px-3 py-1.5 text-sm font-semibold text-zinc-100 hover:bg-white/10 disabled:opacity-50"
