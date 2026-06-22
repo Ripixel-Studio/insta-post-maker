@@ -304,20 +304,60 @@ export function TextNode({ layer }: NodeProps) {
     shadowOffsetY: t.shadow.offsetY,
   };
 
-  // With a background, wrap a rounded panel + inset text in a Group so the
-  // node's box matches the layer box (keeping transforms consistent).
+  // With a background, wrap a panel/highlight + text in a Group so the node's
+  // box matches the layer box (keeping transforms consistent).
   if (t.background.enabled) {
     const pad = t.background.padding;
+    const groupHandlers = {
+      onMouseDown: onSelect,
+      onTap: onSelect,
+      onDblClick: onStartTextEdit,
+      onDblTap: onStartTextEdit,
+      onDragEnd,
+      onTransformEnd,
+    };
+
+    // Instagram-style highlight: a tight rounded rect hugging each line.
+    if ((t.background.mode ?? 'box') === 'highlight') {
+      const areaW = Math.max(1, t.width - pad * 2);
+      const lines = wrapHighlightLines(t, areaW);
+      const lineH = t.fontSize * t.lineHeight;
+      const lineLeft = (w: number) =>
+        t.align === 'center'
+          ? pad + (areaW - w) / 2
+          : t.align === 'right'
+            ? pad + (areaW - w)
+            : pad;
+      return (
+        <Group {...centeredProps(layer)} {...groupHandlers}>
+          {lines.map((ln, i) =>
+            ln.width > 0 ? (
+              <Rect
+                key={i}
+                x={lineLeft(ln.width) - pad}
+                y={i * lineH}
+                width={ln.width + pad * 2}
+                height={lineH}
+                fill={t.background.color}
+                cornerRadius={Math.min(t.background.cornerRadius, lineH / 2)}
+              />
+            ) : null,
+          )}
+          <KonvaText
+            x={pad}
+            y={0}
+            width={areaW}
+            wrap="none"
+            {...textProps}
+            text={lines.map((l) => l.text).join('\n')}
+          />
+        </Group>
+      );
+    }
+
+    // Box: one rectangle behind the whole text.
     return (
-      <Group
-        {...centeredProps(layer)}
-        onMouseDown={onSelect}
-        onTap={onSelect}
-        onDblClick={onStartTextEdit}
-        onDblTap={onStartTextEdit}
-        onDragEnd={onDragEnd}
-        onTransformEnd={onTransformEnd}
-      >
+      <Group {...centeredProps(layer)} {...groupHandlers}>
         <Rect
           width={t.width}
           height={t.height}
@@ -349,6 +389,41 @@ export function TextNode({ layer }: NodeProps) {
       onTransformEnd={onTransformEnd}
     />
   );
+}
+
+/* Line measurement for the per-line text "highlight" background. */
+let _measureCanvas: HTMLCanvasElement | null = null;
+function measureCtx(): CanvasRenderingContext2D {
+  if (!_measureCanvas) _measureCanvas = document.createElement('canvas');
+  return _measureCanvas.getContext('2d')!;
+}
+function fontCss(t: TextLayer): string {
+  const italic = t.fontStyle.includes('italic') ? 'italic ' : '';
+  const bold = t.fontStyle.includes('bold') ? 'bold ' : '';
+  return `${italic}${bold}${t.fontSize}px "${t.fontFamily}", sans-serif`;
+}
+/** Word-wrap text to maxWidth, returning each line + its measured width. */
+function wrapHighlightLines(t: TextLayer, maxWidth: number): { text: string; width: number }[] {
+  const ctx = measureCtx();
+  ctx.font = fontCss(t);
+  const measure = (s: string) =>
+    ctx.measureText(s).width + Math.max(0, s.length - 1) * t.letterSpacing;
+  const out: { text: string; width: number }[] = [];
+  for (const para of (t.text ?? '').split('\n')) {
+    const words = para.split(' ');
+    let line = '';
+    for (const w of words) {
+      const test = line ? `${line} ${w}` : w;
+      if (line && measure(test) > maxWidth) {
+        out.push({ text: line, width: measure(line) });
+        line = w;
+      } else {
+        line = test;
+      }
+    }
+    out.push({ text: line, width: measure(line) });
+  }
+  return out;
 }
 
 /** Konva fill props for a layer that may carry a solid colour or a linear

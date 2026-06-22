@@ -543,6 +543,95 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
 
 /* -------------------------------- Text -------------------------------- */
 
+type TextBg = TextLayer['background'];
+
+/** Background-shape presets (Instagram-style). */
+function applyBgPreset(layer: TextLayer, key: string): TextBg {
+  const bg = layer.background;
+  const pad = bg.padding || 16;
+  const r = Math.round(layer.fontSize * 0.3);
+  switch (key) {
+    case 'none':
+      return { ...bg, enabled: false };
+    case 'square':
+      return { ...bg, enabled: true, mode: 'box', cornerRadius: 0, padding: pad };
+    case 'rounded':
+      return { ...bg, enabled: true, mode: 'box', cornerRadius: r, padding: pad };
+    case 'pill':
+      return { ...bg, enabled: true, mode: 'box', cornerRadius: 9999, padding: bg.padding || 22 };
+    case 'highlight':
+      return { ...bg, enabled: true, mode: 'highlight', cornerRadius: r, padding: bg.padding || 14 };
+    default:
+      return bg;
+  }
+}
+const BG_PRESETS = [
+  { key: 'none', label: 'None' },
+  { key: 'square', label: 'Square' },
+  { key: 'rounded', label: 'Round' },
+  { key: 'pill', label: 'Pill' },
+  { key: 'highlight', label: 'Mark' },
+];
+
+/** One-tap text styles. */
+const TEXT_STYLES: { key: string; label: string; apply: (l: TextLayer) => Partial<TextLayer> }[] = [
+  {
+    key: 'classic',
+    label: 'Classic',
+    apply: (l) => ({
+      fontFamily: 'Inter',
+      fontStyle: 'bold',
+      fill: '#ffffff',
+      fillKind: 'solid',
+      background: { ...l.background, enabled: false },
+      shadow: { ...l.shadow, enabled: false },
+    }),
+  },
+  {
+    key: 'highlight',
+    label: 'Highlight',
+    apply: (l) => ({
+      fontFamily: 'Anton',
+      fontStyle: 'normal',
+      fill: '#111111',
+      fillKind: 'solid',
+      background: { enabled: true, mode: 'highlight', color: '#ffffff', cornerRadius: Math.round(l.fontSize * 0.3), padding: 14 },
+    }),
+  },
+  {
+    key: 'neon',
+    label: 'Neon',
+    apply: (l) => ({
+      fontFamily: 'Righteous',
+      fill: '#39ff14',
+      fillKind: 'solid',
+      background: { ...l.background, enabled: false },
+      shadow: { enabled: true, color: '#39ff14', blur: 26, offsetX: 0, offsetY: 0 },
+    }),
+  },
+  {
+    key: 'marker',
+    label: 'Marker',
+    apply: (l) => ({
+      fontFamily: 'Permanent Marker',
+      fontStyle: 'normal',
+      fill: '#ffffff',
+      background: { ...l.background, enabled: false },
+      shadow: { enabled: true, color: 'rgba(0,0,0,0.5)', blur: 6, offsetX: 0, offsetY: 2 },
+    }),
+  },
+  {
+    key: 'script',
+    label: 'Script',
+    apply: (l) => ({
+      fontFamily: 'Pacifico',
+      fontStyle: 'normal',
+      fill: '#ffffff',
+      background: { ...l.background, enabled: false },
+    }),
+  },
+];
+
 function TextProps({ layer }: { layer: TextLayer }) {
   const updateLayer = useEditor((s) => s.updateLayer);
   const customFonts = useEditor((s) => s.customFonts);
@@ -567,6 +656,17 @@ function TextProps({ layer }: { layer: TextLayer }) {
       <Field label="Text">
         <textarea className={inputCls} rows={2} value={layer.text}
           onChange={(e) => patch({ text: e.target.value })} />
+      </Field>
+      <Field label="Quick style">
+        <div className="flex flex-wrap gap-1">
+          {TEXT_STYLES.map((s) => (
+            <button key={s.key}
+              className="rounded-md bg-white/5 px-2 py-1 text-xs hover:bg-white/10"
+              onClick={() => patch(s.apply(layer))}>
+              {s.label}
+            </button>
+          ))}
+        </div>
       </Field>
       <Field label="Font">
         <div className="flex gap-1">
@@ -644,21 +744,33 @@ function TextProps({ layer }: { layer: TextLayer }) {
         </>
       )}
 
-      {/* Background pill */}
-      <div className="mb-2 mt-1 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Background</span>
-        <input type="checkbox" className="accent-violet-500" checked={layer.background.enabled}
-          onChange={(e) => patch({ background: { ...layer.background, enabled: e.target.checked } })} />
-      </div>
+      {/* Background shape */}
+      <Field label="Background">
+        <div className="grid grid-cols-5 gap-1">
+          {BG_PRESETS.map((opt) => {
+            const bg = layer.background;
+            const mode = bg.mode ?? 'box';
+            const active =
+              (opt.key === 'none' && !bg.enabled) ||
+              (bg.enabled && opt.key === 'square' && mode === 'box' && bg.cornerRadius === 0) ||
+              (bg.enabled && opt.key === 'rounded' && mode === 'box' && bg.cornerRadius > 0 && bg.cornerRadius < 1000) ||
+              (bg.enabled && opt.key === 'pill' && mode === 'box' && bg.cornerRadius >= 1000) ||
+              (bg.enabled && opt.key === 'highlight' && mode === 'highlight');
+            return (
+              <button key={opt.key}
+                className={`rounded-md px-1 py-1.5 text-xs ${active ? 'bg-violet-500 text-white' : 'bg-white/5 hover:bg-white/10'}`}
+                onClick={() => patch({ background: applyBgPreset(layer, opt.key) })}>
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
       {layer.background.enabled && (
         <>
           <Field label="Background color">
             <ColorField value={layer.background.color}
               onChange={(c) => patch({ background: { ...layer.background, color: c } })} />
-          </Field>
-          <Field label="Corner radius">
-            <input type="number" className={inputCls} value={layer.background.cornerRadius}
-              onChange={(e) => patch({ background: { ...layer.background, cornerRadius: Number(e.target.value) } })} />
           </Field>
           <Slider label={`Padding — ${layer.background.padding}px`} min={0} max={80} step={1}
             value={layer.background.padding}

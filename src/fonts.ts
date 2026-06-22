@@ -19,10 +19,20 @@ export const FONTS: FontDef[] = [
   { family: 'Montserrat', spec: 'Montserrat:wght@400;700' },
   { family: 'Playfair Display', spec: 'Playfair+Display:ital,wght@0,400;0,700;1,400' },
   { family: 'Bebas Neue', spec: 'Bebas+Neue' },
-  { family: 'Lobster', spec: 'Lobster' },
   { family: 'Oswald', spec: 'Oswald:wght@400;700' },
-  { family: 'Dancing Script', spec: 'Dancing+Script:wght@400;700' },
+  { family: 'Anton', spec: 'Anton' },
   { family: 'Roboto Mono', spec: 'Roboto+Mono:wght@400;700' },
+  // Cute / display / handwritten
+  { family: 'Caveat', spec: 'Caveat:wght@400;700' },
+  { family: 'Pacifico', spec: 'Pacifico' },
+  { family: 'Permanent Marker', spec: 'Permanent+Marker' },
+  { family: 'Shrikhand', spec: 'Shrikhand' },
+  { family: 'Sacramento', spec: 'Sacramento' },
+  { family: 'Dancing Script', spec: 'Dancing+Script:wght@400;700' },
+  { family: 'Lobster', spec: 'Lobster' },
+  { family: 'Righteous', spec: 'Righteous' },
+  { family: 'Abril Fatface', spec: 'Abril+Fatface' },
+  { family: 'Bungee', spec: 'Bungee' },
 ];
 
 let injected = false;

@@ -108,6 +108,9 @@ export interface TextShadow {
 
 export interface TextBackground {
   enabled: boolean;
+  /** 'box' = one rectangle behind the whole text; 'highlight' = a tight rounded
+   * rectangle hugging each line (the Instagram look). */
+  mode?: 'box' | 'highlight';
   color: string;
   cornerRadius: number;
   padding: number;
