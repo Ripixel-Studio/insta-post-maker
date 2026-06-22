@@ -8,7 +8,54 @@ import { cutoutAsset, portraitBlur } from '../bgRemoval';
 import { bakeOutline } from '../sticker';
 import { ColorField } from './ColorField';
 import { GradientEditor } from './GradientEditor';
-import type { MaskShape, GradientFill, DrawLayer } from '../types';
+import type { MaskShape, GradientFill, DrawLayer, TextShadow } from '../types';
+
+const DEFAULT_SHADOW: TextShadow = {
+  enabled: true,
+  color: 'rgba(0,0,0,0.5)',
+  blur: 14,
+  offsetX: 0,
+  offsetY: 8,
+};
+
+/** Drop-shadow controls shared by images, shapes and drawings. */
+function ShadowSection({
+  shadow,
+  onChange,
+}: {
+  shadow?: TextShadow;
+  onChange: (s: TextShadow) => void;
+}) {
+  const sh = shadow ?? { ...DEFAULT_SHADOW, enabled: false };
+  return (
+    <>
+      <div className="mb-2 mt-1 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Shadow</span>
+        <input type="checkbox" className="accent-violet-500" checked={sh.enabled}
+          onChange={(e) => onChange({ ...sh, enabled: e.target.checked })} />
+      </div>
+      {sh.enabled && (
+        <>
+          <Field label="Shadow colour">
+            <ColorField value={sh.color} onChange={(c) => onChange({ ...sh, color: c })} />
+          </Field>
+          <Slider label={`Blur — ${sh.blur}`} min={0} max={80} step={1}
+            value={sh.blur} onChange={(v) => onChange({ ...sh, blur: v })} />
+          <div className="flex gap-2">
+            <Field label="Offset X">
+              <input type="number" className={inputCls} value={sh.offsetX}
+                onChange={(e) => onChange({ ...sh, offsetX: Number(e.target.value) })} />
+            </Field>
+            <Field label="Offset Y">
+              <input type="number" className={inputCls} value={sh.offsetY}
+                onChange={(e) => onChange({ ...sh, offsetY: Number(e.target.value) })} />
+            </Field>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
 
 /** Solid/gradient fill control shared by text and shapes. */
 function FillEditor({
@@ -548,6 +595,8 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
         value={f.saturation} onChange={(v) => setFilter({ saturation: v })} />
       <Slider label={`Blur — ${f.blur}px`} min={0} max={40} step={1}
         value={f.blur} onChange={(v) => setFilter({ blur: v })} />
+
+      <ShadowSection shadow={layer.shadow} onChange={(s) => updateLayer(layer.id, { shadow: s })} />
     </>
   );
 }
@@ -713,6 +762,16 @@ function TextProps({ layer }: { layer: TextLayer }) {
         <FillEditor fill={layer.fill} fillKind={layer.fillKind} gradient={layer.gradient}
           onChange={patch} />
       </Field>
+      <Field label={`Outline — ${layer.strokeWidth ?? 0}px`}>
+        <input type="range" min={0} max={24} step={1} value={layer.strokeWidth ?? 0}
+          className="w-full accent-violet-500"
+          onChange={(e) => patch({ strokeWidth: Number(e.target.value) })} />
+        {(layer.strokeWidth ?? 0) > 0 && (
+          <div className="mt-1">
+            <ColorField value={layer.stroke ?? '#000000'} onChange={(c) => patch({ stroke: c })} />
+          </div>
+        )}
+      </Field>
       <Field label="Align">
         <div className="flex gap-1">
           {(['left', 'center', 'right'] as const).map((a) => (
@@ -863,6 +922,7 @@ function ShapeProps({ layer }: { layer: ShapeLayer }) {
         <input type="number" className={inputCls} value={layer.strokeWidth}
           onChange={(e) => patch({ strokeWidth: Number(e.target.value) })} />
       </Field>
+      <ShadowSection shadow={layer.shadow} onChange={(s) => patch({ shadow: s })} />
     </>
   );
 }

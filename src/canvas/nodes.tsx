@@ -11,6 +11,7 @@ import type {
   ShapeLayer,
   DrawLayer,
   GradientFill,
+  TextShadow,
 } from '../types';
 import { getAsset } from '../assets';
 import { useEditor } from '../store';
@@ -128,6 +129,18 @@ function buildFilters(f: ImageFilters) {
 
 function filtersActive(f: ImageFilters) {
   return f.brightness !== 0 || f.contrast !== 0 || f.saturation !== 0 || f.blur > 0;
+}
+
+/** Konva drop-shadow props from an optional layer shadow. */
+function shadowProps(shadow: TextShadow | undefined) {
+  if (!shadow || !shadow.enabled) return {};
+  return {
+    shadowEnabled: true,
+    shadowColor: shadow.color,
+    shadowBlur: shadow.blur,
+    shadowOffsetX: shadow.offsetX,
+    shadowOffsetY: shadow.offsetY,
+  };
 }
 
 /** Draw a mask path in the box's local coordinates (0,0 → w,h). */
@@ -256,6 +269,7 @@ export function ImageNode({ layer, isSelected }: NodeProps) {
     contrast: img.filters.contrast,
     saturation: img.filters.saturation,
     blurRadius: img.filters.blur,
+    ...shadowProps(img.shadow),
   };
 
   const maskActive = img.mask && img.mask !== 'none';
@@ -301,6 +315,9 @@ export function TextNode({ layer }: NodeProps) {
     fontSize: t.fontSize,
     fontStyle: t.fontStyle,
     ...fillProps(t, t.width, t.height),
+    stroke: t.strokeWidth ? t.stroke : undefined,
+    strokeWidth: t.strokeWidth ?? 0,
+    fillAfterStrokeEnabled: true,
     align: t.align,
     lineHeight: t.lineHeight,
     letterSpacing: t.letterSpacing,
@@ -515,6 +532,7 @@ export function ShapeNode({ layer }: NodeProps) {
   const { onDragEnd, onTransformEnd } = useCommonHandlers(layer, onChange);
   const common = {
     ...centeredProps(layer),
+    ...shadowProps(s.shadow),
     onMouseDown: onSelect,
     onTap: onSelect,
     onDragEnd,

@@ -41,6 +41,9 @@ export interface BaseLayer {
   /** Reveal step for the layer-by-layer animation. Layers sharing a step
    * animate in together. Undefined = auto (its paint-order position). */
   animStep?: number;
+  /** Optional drop shadow (images, shapes, drawings). Text uses its own
+   * required `shadow` field of the same shape. */
+  shadow?: TextShadow;
 }
 
 /** Per-image colour adjustments (applied via cached Konva filters). */
@@ -125,6 +128,9 @@ export interface TextLayer extends BaseLayer {
   fill: string;
   fillKind?: 'solid' | 'gradient';
   gradient?: GradientFill;
+  /** Outline stroke (0 width = none). */
+  stroke?: string;
+  strokeWidth?: number;
   align: 'left' | 'center' | 'right';
   lineHeight: number;
   letterSpacing: number;

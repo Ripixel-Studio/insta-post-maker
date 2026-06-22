@@ -100,6 +100,27 @@ export function FitGlueImport() {
       fontSize: Math.round(design.width * 0.09),
     });
 
+  /** Drop the top stats as a tidy value+label block near the bottom. */
+  function addStatsBlock() {
+    if (!els) return;
+    const picks = els.stats.slice(0, 3);
+    const n = picks.length || 1;
+    const colW = design.width / n;
+    const big = Math.round(design.width * 0.075);
+    const small = Math.round(design.width * 0.03);
+    const yVal = Math.round(design.height * 0.8);
+    picks.forEach((s, i) => {
+      const x = i * colW;
+      addTextElement(s.value, {
+        name: s.label, x, y: yVal, width: colW, align: 'center', fontSize: big,
+      });
+      addTextElement(s.label.toUpperCase(), {
+        name: `${s.label} label`, x, y: yVal + big + 6, width: colW, align: 'center',
+        fontSize: small, fill: '#cbd5e1', letterSpacing: 2, fontStyle: 'normal',
+      });
+    });
+  }
+
   async function addChart(c: ChartItem) {
     setBusy(c.id);
     try {
@@ -258,7 +279,13 @@ export function FitGlueImport() {
                   {/* Stats */}
                   {els.stats.length > 0 && (
                     <div>
-                      <p className="mb-1 text-[10px] uppercase tracking-wide text-zinc-500">Stats (add as text)</p>
+                      <div className="mb-1 flex items-center justify-between">
+                        <p className="text-[10px] uppercase tracking-wide text-zinc-500">Stats (add as text)</p>
+                        <button className="rounded-md bg-violet-500/80 px-2 py-0.5 text-xs font-semibold text-white hover:bg-violet-500"
+                          onClick={addStatsBlock}>
+                          + Stats block
+                        </button>
+                      </div>
                       <div className="grid grid-cols-2 gap-1.5">
                         {els.stats.map((s) => (
                           <button key={s.id} className={chip} onClick={() => addStat(s)}>
