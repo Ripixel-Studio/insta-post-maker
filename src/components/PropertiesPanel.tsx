@@ -368,6 +368,7 @@ function ImageProps({ layer }: { layer: ImageLayer }) {
         updateLayer(newLayerId, {
           name: 'Sticker',
           baseAssetId: cutId,
+          sourceAssetId: layer.assetId,
           outline: { enabled: false, color: '#ffffff', width: 16 },
           x: layer.x,
           y: layer.y,

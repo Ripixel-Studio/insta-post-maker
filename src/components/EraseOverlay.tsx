@@ -21,17 +21,24 @@ export function EraseOverlay() {
   const [mode, setMode] = useState<'erase' | 'restore'>('erase');
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [cursor, setCursor] = useState<{ x: number; y: number; size: number } | null>(null);
 
   const layer = design.pages
     .flatMap((p) => p.layers)
     .concat(design.shared)
     .find((l) => l.id === eraseTargetId);
   const assetId = layer && layer.type === 'image' ? layer.assetId : undefined;
+  // Restore reveals from the ORIGINAL photo for stickers (so areas the cutout
+  // missed can be painted back), otherwise from the image itself.
+  const restoreAssetId =
+    layer && layer.type === 'image' ? layer.sourceAssetId ?? layer.assetId : undefined;
+  const isSticker = !!(layer && layer.type === 'image' && layer.sourceAssetId);
 
-  // Load the asset into the working canvas + keep a pristine copy for restore.
+  // Load the working image; load the restore source (original) into origRef.
   useEffect(() => {
     if (!eraseTargetId || !assetId) return;
     const asset = getAsset(assetId);
+    const restoreAsset = restoreAssetId ? getAsset(restoreAssetId) : asset;
     const canvas = canvasRef.current;
     if (!asset || !canvas) return;
     setReady(false);
@@ -43,15 +50,24 @@ export function EraseOverlay() {
       const ctx = canvas.getContext('2d')!;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0);
-      const orig = document.createElement('canvas');
-      orig.width = canvas.width;
-      orig.height = canvas.height;
-      orig.getContext('2d')!.drawImage(img, 0, 0);
-      origRef.current = orig;
-      setReady(true);
+
+      const finishWith = (drawSrc: CanvasImageSource) => {
+        const orig = document.createElement('canvas');
+        orig.width = canvas.width;
+        orig.height = canvas.height;
+        orig.getContext('2d')!.drawImage(drawSrc, 0, 0, canvas.width, canvas.height);
+        origRef.current = orig;
+        setReady(true);
+      };
+
+      const src = new Image();
+      src.crossOrigin = 'anonymous';
+      src.onload = () => finishWith(src);
+      src.onerror = () => finishWith(img);
+      src.src = (restoreAsset ?? asset).url;
     };
     img.src = asset.url;
-  }, [eraseTargetId, assetId]);
+  }, [eraseTargetId, assetId, restoreAssetId]);
 
   if (!eraseTargetId) return null;
 
@@ -159,7 +175,7 @@ export function EraseOverlay() {
           <canvas
             ref={canvasRef}
             className="block max-h-[calc(100vh-7rem)] max-w-full touch-none"
-            style={{ cursor: 'crosshair' }}
+            style={{ cursor: 'none' }}
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);
               const p = toSource(e);
@@ -167,6 +183,12 @@ export function EraseOverlay() {
               stamp(p.x, p.y);
             }}
             onPointerMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setCursor({
+                x: e.clientX,
+                y: e.clientY,
+                size: brush * (rect.width / e.currentTarget.width),
+              });
               if (lastRef.current === null) return;
               const p = toSource(e);
               paintTo(p.x, p.y);
@@ -174,11 +196,29 @@ export function EraseOverlay() {
             onPointerUp={() => {
               lastRef.current = null;
             }}
+            onPointerLeave={() => setCursor(null)}
           />
         </div>
       </div>
+
+      {/* Brush-size preview ring that follows the pointer. */}
+      {cursor && (
+        <div
+          className="pointer-events-none fixed rounded-full border-2 border-white/80 mix-blend-difference"
+          style={{
+            left: cursor.x,
+            top: cursor.y,
+            width: cursor.size,
+            height: cursor.size,
+            transform: 'translate(-50%, -50%)',
+          }}
+        />
+      )}
+
       <p className="px-4 pb-3 text-center text-xs text-zinc-500">
-        Paint to erase parts of the image; switch to Restore to paint them back.
+        {isSticker
+          ? 'Erase stray bits; Restore paints back from the original photo (e.g. a missed shoulder).'
+          : 'Paint to erase parts of the image; switch to Restore to paint them back.'}
       </p>
     </div>
   );

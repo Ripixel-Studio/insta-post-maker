@@ -92,6 +92,9 @@ export interface ImageLayer extends BaseLayer {
   /** Present when this layer is a subject cutout ("sticker"). Holds the clean
    * cutout asset so the outline can be re-baked. */
   baseAssetId?: string;
+  /** The original (pre-cutout) photo a sticker was made from, so the erase tool
+   * can RESTORE areas the auto-cutout missed. */
+  sourceAssetId?: string;
   outline?: StickerOutline;
 }
 
