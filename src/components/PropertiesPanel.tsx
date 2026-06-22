@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useEditor, activePage } from '../store';
-import { FONTS, uploadFont } from '../fonts';
+import { FONTS, uploadFont, ensureFont } from '../fonts';
 import { FILTER_PRESETS } from '../filters';
 import { PRESETS } from '../presets';
 import { addImageAsset, getAsset } from '../assets';
@@ -662,7 +662,11 @@ function TextProps({ layer }: { layer: TextLayer }) {
           {TEXT_STYLES.map((s) => (
             <button key={s.key}
               className="rounded-md bg-white/5 px-2 py-1 text-xs hover:bg-white/10"
-              onClick={() => patch(s.apply(layer))}>
+              onClick={() => {
+                const p = s.apply(layer);
+                if (p.fontFamily) ensureFont(p.fontFamily);
+                patch(p);
+              }}>
               {s.label}
             </button>
           ))}
@@ -671,7 +675,7 @@ function TextProps({ layer }: { layer: TextLayer }) {
       <Field label="Font">
         <div className="flex gap-1">
           <select className={inputCls} value={layer.fontFamily}
-            onChange={(e) => patch({ fontFamily: e.target.value })}>
+            onChange={(e) => { ensureFont(e.target.value); patch({ fontFamily: e.target.value }); }}>
             {FONTS.map((ft) => <option key={ft.family} value={ft.family}>{ft.family}</option>)}
             {customFonts.length > 0 && (
               <optgroup label="Your fonts">

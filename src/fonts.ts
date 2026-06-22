@@ -6,6 +6,25 @@
  */
 
 import { putFont, getAllFonts } from './persistence';
+import { stageHolder } from './canvas/stageHolder';
+
+/** Konva draws text to the canvas immediately; if the web font isn't ready yet
+ * it uses a fallback and won't redraw on its own. Force a redraw. */
+function redrawCanvas() {
+  stageHolder.current?.batchDraw();
+}
+
+/** Force-download a family (regular + bold) so it's ready before first use,
+ * then redraw so any fallback-rendered text is replaced. */
+export function ensureFont(family: string): void {
+  if (typeof document === 'undefined' || !document.fonts) return;
+  Promise.all([
+    document.fonts.load(`400 48px "${family}"`),
+    document.fonts.load(`700 48px "${family}"`),
+  ])
+    .then(redrawCanvas)
+    .catch(() => {});
+}
 
 export interface FontDef {
   family: string;
@@ -57,6 +76,14 @@ export function loadFonts() {
   link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
 
   document.head.append(pre1, pre2, link);
+
+  // Redraw the canvas whenever any batch of fonts finishes loading, so text
+  // that was drawn with a fallback is re-rendered in the real face.
+  if (document.fonts) {
+    document.fonts.addEventListener('loadingdone', redrawCanvas);
+    // Eagerly fetch every curated font so picking one never flashes a fallback.
+    FONTS.forEach((f) => ensureFont(f.family));
+  }
 }
 
 /** Register a font from raw bytes via the FontFace API. */

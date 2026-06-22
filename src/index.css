@@ -28,3 +28,14 @@ body {
 .canvas-surface {
   touch-action: none;
 }
+
+/* Native <select> dropdowns: render the popup dark with readable text
+   (otherwise options inherit our light text on the browser's light popup). */
+select {
+  color-scheme: dark;
+}
+select option,
+select optgroup {
+  background-color: #1b1d22;
+  color: #e6e8eb;
+}
