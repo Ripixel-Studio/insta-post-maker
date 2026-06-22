@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useEditor } from '../store';
+import { useEditor, activePage } from '../store';
 import { FONTS, uploadFont } from '../fonts';
 import { FILTER_PRESETS } from '../filters';
 import { PRESETS } from '../presets';
@@ -123,13 +123,15 @@ function Slider({
 /* ----------------------------- Layers list ----------------------------- */
 
 function LayersList() {
-  const layers = useEditor((s) => s.design.layers);
+  const pageLayers = useEditor((s) => activePage(s).layers);
+  const sharedLayers = useEditor((s) => s.design.shared);
   const selectedId = useEditor((s) => s.selectedId);
   const select = useEditor((s) => s.select);
   const moveLayer = useEditor((s) => s.moveLayer);
   const reorderLayer = useEditor((s) => s.reorderLayer);
   const removeLayer = useEditor((s) => s.removeLayer);
   const updateLayer = useEditor((s) => s.updateLayer);
+  const toggleShared = useEditor((s) => s.toggleShared);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const dragRef = useRef<string | null>(null);
@@ -154,64 +156,83 @@ function LayersList() {
     (e.target as Element).releasePointerCapture?.(e.pointerId);
   };
 
+  const renderRow = (layer: Layer, shared: boolean) => (
+    <li
+      key={layer.id}
+      data-layer-id={layer.id}
+      className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm ${
+        layer.id === selectedId ? 'bg-violet-500/20 text-white' : 'hover:bg-white/5'
+      } ${overId === layer.id && dragId !== layer.id ? 'ring-1 ring-violet-400' : ''} ${
+        dragId === layer.id ? 'opacity-50' : ''
+      }`}
+    >
+      <span
+        className="cursor-grab touch-none select-none px-0.5 opacity-40"
+        title="Drag to reorder"
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          dragRef.current = layer.id;
+          setDragId(layer.id);
+        }}
+        onPointerMove={handleMove}
+        onPointerUp={handleUp}
+      >
+        ⠿
+      </span>
+      <button
+        className="opacity-60 hover:opacity-100"
+        title={layer.locked ? 'Unlock' : 'Lock'}
+        onClick={() => updateLayer(layer.id, { locked: !layer.locked })}
+      >
+        {layer.locked ? '🔒' : '🔓'}
+      </button>
+      <button
+        className="opacity-60 hover:opacity-100"
+        title={layer.visible ? 'Hide' : 'Show'}
+        onClick={() => updateLayer(layer.id, { visible: !layer.visible })}
+      >
+        {layer.visible ? '👁' : '🙈'}
+      </button>
+      <button className="flex-1 truncate text-left" onClick={() => select(layer.id)}>
+        {layer.name}
+      </button>
+      <button
+        className={`hover:opacity-100 ${shared ? 'opacity-100' : 'opacity-40'}`}
+        title={shared ? 'On every page — make page-only' : 'Show on every page'}
+        onClick={() => toggleShared(layer.id)}
+      >
+        📌
+      </button>
+      <button className="opacity-60 hover:opacity-100" title="Bring forward"
+        onClick={() => moveLayer(layer.id, 'up')}>↑</button>
+      <button className="opacity-60 hover:opacity-100" title="Send backward"
+        onClick={() => moveLayer(layer.id, 'down')}>↓</button>
+      <button className="opacity-60 hover:opacity-100" title="Delete"
+        onClick={() => removeLayer(layer.id)}>✕</button>
+    </li>
+  );
+
   return (
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
         Layers
       </h3>
-      {layers.length === 0 && (
+      {pageLayers.length === 0 && sharedLayers.length === 0 && (
         <p className="text-sm text-zinc-500">No layers yet. Add an image, text or gradient.</p>
       )}
       <ul className="flex flex-col gap-1">
-        {[...layers].reverse().map((layer) => (
-          <li
-            key={layer.id}
-            data-layer-id={layer.id}
-            className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm ${
-              layer.id === selectedId ? 'bg-violet-500/20 text-white' : 'hover:bg-white/5'
-            } ${overId === layer.id && dragId !== layer.id ? 'ring-1 ring-violet-400' : ''} ${
-              dragId === layer.id ? 'opacity-50' : ''
-            }`}
-          >
-            <span
-              className="cursor-grab touch-none select-none px-0.5 opacity-40"
-              title="Drag to reorder"
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId);
-                dragRef.current = layer.id;
-                setDragId(layer.id);
-              }}
-              onPointerMove={handleMove}
-              onPointerUp={handleUp}
-            >
-              ⠿
-            </span>
-            <button
-              className="opacity-60 hover:opacity-100"
-              title={layer.locked ? 'Unlock' : 'Lock'}
-              onClick={() => updateLayer(layer.id, { locked: !layer.locked })}
-            >
-              {layer.locked ? '🔒' : '🔓'}
-            </button>
-            <button
-              className="opacity-60 hover:opacity-100"
-              title={layer.visible ? 'Hide' : 'Show'}
-              onClick={() => updateLayer(layer.id, { visible: !layer.visible })}
-            >
-              {layer.visible ? '👁' : '🙈'}
-            </button>
-            <button className="flex-1 truncate text-left" onClick={() => select(layer.id)}>
-              {layer.name}
-            </button>
-            <button className="opacity-60 hover:opacity-100" title="Bring forward"
-              onClick={() => moveLayer(layer.id, 'up')}>↑</button>
-            <button className="opacity-60 hover:opacity-100" title="Send backward"
-              onClick={() => moveLayer(layer.id, 'down')}>↓</button>
-            <button className="opacity-60 hover:opacity-100" title="Delete"
-              onClick={() => removeLayer(layer.id)}>✕</button>
-          </li>
-        ))}
+        {[...pageLayers].reverse().map((layer) => renderRow(layer, false))}
       </ul>
+      {sharedLayers.length > 0 && (
+        <>
+          <p className="mb-1 mt-3 text-[10px] uppercase tracking-wide text-zinc-500">
+            Shared (all pages)
+          </p>
+          <ul className="flex flex-col gap-1">
+            {[...sharedLayers].reverse().map((layer) => renderRow(layer, true))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
@@ -685,11 +706,11 @@ function ShapeProps({ layer }: { layer: ShapeLayer }) {
 /* ------------------------------- Collage ------------------------------- */
 
 function CellPanel({ cellId }: { cellId: string }) {
-  const design = useEditor((s) => s.design);
+  const collage = useEditor((s) => activePage(s).collage);
   const updateCell = useEditor((s) => s.updateCell);
   const clearCollage = useEditor((s) => s.clearCollage);
   const fileRef = useRef<HTMLInputElement>(null);
-  const cell = design.collage?.cells.find((c) => c.id === cellId);
+  const cell = collage?.cells.find((c) => c.id === cellId);
   if (!cell) return null;
 
   async function replace(file: File | undefined) {
@@ -745,7 +766,7 @@ function CellPanel({ cellId }: { cellId: string }) {
 }
 
 function LayoutPanel() {
-  const collage = useEditor((s) => s.design.collage);
+  const collage = useEditor((s) => activePage(s).collage);
   const updateCollage = useEditor((s) => s.updateCollage);
   const clearCollage = useEditor((s) => s.clearCollage);
   if (!collage) return null;
@@ -769,6 +790,7 @@ function LayoutPanel() {
 
 function CanvasProps() {
   const design = useEditor((s) => s.design);
+  const background = useEditor((s) => activePage(s).background);
   const setBackground = useEditor((s) => s.setBackground);
   const setCanvasSize = useEditor((s) => s.setCanvasSize);
   const magicResize = useEditor((s) => s.magicResize);
@@ -778,8 +800,8 @@ function CanvasProps() {
   return (
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Canvas</h3>
-      <Field label="Background">
-        <ColorField value={design.background} onChange={setBackground} />
+      <Field label="Page background">
+        <ColorField value={background} onChange={setBackground} />
       </Field>
       <Field label="Size (px)">
         <div className="flex items-center gap-2">
@@ -818,10 +840,14 @@ function CanvasProps() {
 function PanelContent() {
   const selectedId = useEditor((s) => s.selectedId);
   const selectedCellId = useEditor((s) => s.selectedCellId);
-  const design = useEditor((s) => s.design);
+  const pageLayers = useEditor((s) => activePage(s).layers);
+  const sharedLayers = useEditor((s) => s.design.shared);
   const removeLayer = useEditor((s) => s.removeLayer);
   const duplicateLayer = useEditor((s) => s.duplicateLayer);
-  const layer = design.layers.find((l) => l.id === selectedId) ?? null;
+  const layer =
+    pageLayers.find((l) => l.id === selectedId) ??
+    sharedLayers.find((l) => l.id === selectedId) ??
+    null;
 
   return (
     <>

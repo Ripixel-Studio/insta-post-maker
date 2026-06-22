@@ -81,15 +81,26 @@ function pill(box: { x: number; y: number; width: number; height: number }, fill
   };
 }
 
-/** Deep-clone a design with fresh layer/cell ids, so applying a template never
- * collides with existing ids. */
+/** Deep-clone a design with fresh page/layer/cell ids, so applying a template
+ * never collides with existing ids. */
 export function freshenDesign(d: Design): Design {
   const clone = structuredClone(d);
-  clone.layers = clone.layers.map((l) => ({ ...l, id: nextId('layer') }));
-  if (clone.collage) {
-    clone.collage.cells = clone.collage.cells.map((c) => ({ ...c, id: nextId('cell') }));
-  }
+  const fresh = (l: Layer): Layer => ({ ...l, id: nextId('layer') });
+  clone.pages = clone.pages.map((p) => ({
+    ...p,
+    id: nextId('page'),
+    layers: p.layers.map(fresh),
+    collage: p.collage
+      ? { ...p.collage, cells: p.collage.cells.map((c) => ({ ...c, id: nextId('cell') })) }
+      : undefined,
+  }));
+  clone.shared = clone.shared.map(fresh);
   return clone;
+}
+
+/** Wrap a single page's worth of content into a Design. */
+function single(background: string, layers: Layer[], collage?: Collage): Design {
+  return { width: W, height: H, pages: [{ id: nextId('page'), background, layers, collage }], shared: [] };
 }
 
 export interface DesignTemplate {
@@ -102,11 +113,8 @@ export const TEMPLATES: DesignTemplate[] = [
   {
     id: 'bold-caption',
     label: 'Bold caption',
-    build: (): Design => ({
-      width: W,
-      height: H,
-      background: '#1b1d22',
-      layers: [
+    build: (): Design =>
+      single('#1b1d22', [
         scrim(),
         pill({ x: 72, y: H - 540, width: 150, height: 60 }, '#c084fc'),
         text('LABEL', { x: 96, y: H - 532, width: 200, height: 50 }, {
@@ -118,25 +126,20 @@ export const TEMPLATES: DesignTemplate[] = [
         text('A short supporting line of context underneath.', { x: 72, y: H - 150, width: W - 144, height: 70 }, {
           fontSize: 40, fontStyle: 'normal', fill: '#d4d4d8', name: 'Subtitle',
         }),
-      ],
-    }),
+      ]),
   },
   {
     id: 'quote',
     label: 'Quote',
-    build: (): Design => ({
-      width: W,
-      height: H,
-      background: '#0e0f13',
-      layers: [
+    build: (): Design =>
+      single('#0e0f13', [
         text('“The quote\ngoes right\nhere.”', { x: 120, y: H * 0.32, width: W - 240, height: 700 }, {
           fontFamily: 'Playfair Display', fontSize: 130, align: 'center', lineHeight: 1.15, name: 'Quote',
         }),
         text('— Attribution', { x: 120, y: H * 0.7, width: W - 240, height: 70 }, {
           fontSize: 44, fontStyle: 'italic', fill: '#a1a1aa', align: 'center', name: 'Attribution',
         }),
-      ],
-    }),
+      ]),
   },
   {
     id: 'two-up',
@@ -149,18 +152,16 @@ export const TEMPLATES: DesignTemplate[] = [
           { id: nextId('cell'), c0: 0, c1: 0, r0: 1, r1: 1, zoom: 1, offsetX: 0.5, offsetY: 0.5 },
         ],
       };
-      return {
-        width: W,
-        height: H,
-        background: '#000000',
-        collage,
-        layers: [
+      return single(
+        '#000000',
+        [
           text('YOUR TITLE', { x: 72, y: H - 180, width: W - 144, height: 90 }, {
             fontSize: 72, align: 'center', name: 'Title',
             background: { enabled: true, color: 'rgba(0,0,0,0.55)', cornerRadius: 16, padding: 18 },
           }),
         ],
-      };
+        collage,
+      );
     },
   },
 ];

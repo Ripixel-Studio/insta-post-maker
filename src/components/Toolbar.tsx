@@ -73,10 +73,30 @@ export function Toolbar() {
     return { blob, name };
   }
 
+  /** Render every page by switching the active page and waiting for a repaint. */
+  async function exportAllPages() {
+    const ext = format === 'png' ? 'png' : 'jpg';
+    const { setActivePage, activePageIndex: original } = useEditor.getState();
+    const total = useEditor.getState().design.pages.length;
+    const nextFrame = () =>
+      new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    for (let i = 0; i < total; i++) {
+      setActivePage(i);
+      await nextFrame();
+      await new Promise((r) => setTimeout(r, 140)); // let images/fonts settle
+      const blob = await exportDesign(useEditor.getState().design, { format, multiplier });
+      downloadBlob(blob, `page-${i + 1}-of-${total}.${ext}`);
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    setActivePage(original);
+  }
+
   async function handleExport() {
     setBusy(true);
     try {
-      if (slides > 1) {
+      if (design.pages.length > 1) {
+        await exportAllPages();
+      } else if (slides > 1) {
         const blobs = await exportCarousel(design, { format, multiplier }, slides);
         const ext = format === 'png' ? 'png' : 'jpg';
         // Stagger downloads so the browser doesn't block the batch.

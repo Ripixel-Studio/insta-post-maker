@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Stage, Layer as KonvaLayer, Rect, Transformer } from 'react-konva';
 import type Konva from 'konva';
-import { useEditor } from '../store';
+import { useEditor, activePage, combinedLayers } from '../store';
 import { LayerNode } from './nodes';
 import { CropOverlay } from './CropOverlay';
 import { CollageView } from './CollageView';
@@ -24,6 +24,13 @@ const ASPECTS: { label: string; ratio: number | null }[] = [
 
 export function CanvasStage() {
   const design = useEditor((s) => s.design);
+  const pageLayers = useEditor((s) => activePage(s).layers);
+  const sharedLayers = useEditor((s) => s.design.shared);
+  const pageBackground = useEditor((s) => activePage(s).background);
+  const pageCollage = useEditor((s) => activePage(s).collage);
+  const pageCount = useEditor((s) => s.design.pages.length);
+  const activePageIndex = useEditor((s) => s.activePageIndex);
+  const setActivePage = useEditor((s) => s.setActivePage);
   const selectedId = useEditor((s) => s.selectedId);
   const select = useEditor((s) => s.select);
   const updateLayer = useEditor((s) => s.updateLayer);
@@ -33,6 +40,9 @@ export function CanvasStage() {
   const setEditingText = useEditor((s) => s.setEditingText);
   const selectCell = useEditor((s) => s.selectCell);
   const updateCell = useEditor((s) => s.updateCell);
+
+  // Page layers (bottom) + shared layers (on top).
+  const renderLayers = [...pageLayers, ...sharedLayers];
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -48,9 +58,10 @@ export function CanvasStage() {
   function onStageTouchMove(e: Konva.KonvaEventObject<TouchEvent>) {
     const touches = e.evt.touches;
     if (touches.length !== 2) return;
-    const { selectedId, design, liveUpdateLayer, beginGesture } = useEditor.getState();
+    const state = useEditor.getState();
+    const { selectedId, liveUpdateLayer, beginGesture } = state;
     if (!selectedId) return;
-    const layer = design.layers.find((l) => l.id === selectedId);
+    const layer = combinedLayers(state).find((l) => l.id === selectedId);
     if (!layer || layer.locked) return;
     e.evt.preventDefault();
 
@@ -92,6 +103,28 @@ export function CanvasStage() {
 
   function onStageTouchEnd(e: Konva.KonvaEventObject<TouchEvent>) {
     if (e.evt.touches.length < 2) gestureRef.current = null;
+  }
+
+  // Horizontal swipe across empty canvas switches pages (mobile). Starting on a
+  // layer drags it instead, so swipes only begin on the background.
+  const swipeRef = useRef<{ x: number; bg: boolean } | null>(null);
+  function onSwipeStart(e: Konva.KonvaEventObject<TouchEvent>) {
+    if (e.evt.touches.length !== 1) {
+      swipeRef.current = null;
+      return;
+    }
+    const onBg = e.target === e.target.getStage() || e.target.name() === 'doc-background';
+    swipeRef.current = { x: e.evt.touches[0].clientX, bg: onBg };
+  }
+  function onSwipeEnd(e: Konva.KonvaEventObject<TouchEvent>) {
+    const s = swipeRef.current;
+    swipeRef.current = null;
+    if (!s || !s.bg || gestureRef.current) return;
+    const dx = (e.evt.changedTouches[0]?.clientX ?? s.x) - s.x;
+    if (Math.abs(dx) < 60) return;
+    const { activePageIndex, design, setActivePage } = useEditor.getState();
+    const next = dx < 0 ? activePageIndex + 1 : activePageIndex - 1;
+    if (next >= 0 && next < design.pages.length) setActivePage(next);
   }
 
   async function onFillFile(file: File | undefined) {
@@ -145,7 +178,7 @@ export function CanvasStage() {
     const node = stage.findOne(`#${selectedId}`);
     tr.nodes(node ? [node] : []);
     tr.getLayer()?.batchDraw();
-  }, [selectedId, cropTargetId, editingTextId, design.layers]);
+  }, [selectedId, cropTargetId, editingTextId, pageLayers, sharedLayers, activePageIndex]);
 
   const onBackgroundClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (cropTargetId) return;
@@ -157,7 +190,7 @@ export function CanvasStage() {
 
   const cropLayer =
     cropTargetId &&
-    (design.layers.find((l) => l.id === cropTargetId) as ImageLayer | undefined);
+    (renderLayers.find((l) => l.id === cropTargetId) as ImageLayer | undefined);
 
   function commitCrop(crop: CropRect, box: { width: number; height: number }) {
     if (cropTargetId) updateLayer(cropTargetId, { crop, ...box });
@@ -166,7 +199,7 @@ export function CanvasStage() {
 
   const editingLayer =
     editingTextId &&
-    (design.layers.find((l) => l.id === editingTextId) as TextLayer | undefined);
+    (renderLayers.find((l) => l.id === editingTextId) as TextLayer | undefined);
 
   return (
     <div
@@ -192,9 +225,15 @@ export function CanvasStage() {
             scaleX={scale}
             scaleY={scale}
             onMouseDown={onBackgroundClick}
-            onTouchStart={onBackgroundClick}
+            onTouchStart={(e) => {
+              onBackgroundClick(e);
+              onSwipeStart(e);
+            }}
             onTouchMove={onStageTouchMove}
-            onTouchEnd={onStageTouchEnd}
+            onTouchEnd={(e) => {
+              onStageTouchEnd(e);
+              onSwipeEnd(e);
+            }}
           >
             <KonvaLayer>
               <Rect
@@ -203,12 +242,12 @@ export function CanvasStage() {
                 y={0}
                 width={design.width}
                 height={design.height}
-                fill={design.background}
+                fill={pageBackground}
               />
 
-              {!cropTargetId && design.collage && (
+              {!cropTargetId && pageCollage && (
                 <CollageView
-                  collage={design.collage}
+                  collage={pageCollage}
                   width={design.width}
                   height={design.height}
                   onRequestFill={(cellId) => {
@@ -219,7 +258,7 @@ export function CanvasStage() {
               )}
 
               {!cropTargetId &&
-                design.layers.map((layer) =>
+                renderLayers.map((layer) =>
                   layer.id === editingTextId ? null : (
                     <LayerNode
                       key={layer.id}
@@ -320,6 +359,20 @@ export function CanvasStage() {
           </button>
         </div>
       )}
+
+      {/* Page indicator dots (swipe between pages on mobile). */}
+      {pageCount > 1 && !cropTargetId && (
+        <div className="pointer-events-auto absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/40 px-2 py-1">
+          {Array.from({ length: pageCount }).map((_, i) => (
+            <button
+              key={i}
+              className={`h-2 w-2 rounded-full ${i === activePageIndex ? 'bg-violet-400' : 'bg-white/40'}`}
+              onClick={() => setActivePage(i)}
+              title={`Page ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -333,14 +386,18 @@ function DragGuideTracker({
   stageRef: React.RefObject<Konva.Stage | null>;
   onGuides: (g: Guide[]) => void;
 }) {
-  const design = useEditor((s) => s.design);
+  const width = useEditor((s) => s.design.width);
+  const height = useEditor((s) => s.design.height);
+  const pageLayers = useEditor((s) => activePage(s).layers);
+  const sharedLayers = useEditor((s) => s.design.shared);
   const selectedId = useEditor((s) => s.selectedId);
 
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
+    const layers = [...pageLayers, ...sharedLayers];
     const onMove = () => {
-      if (selectedId) onGuides(computeGuides(design, selectedId, stage));
+      if (selectedId) onGuides(computeGuides(layers, width, height, selectedId, stage));
     };
     const onEnd = () => onGuides([]);
     stage.on('dragmove', onMove);
@@ -349,7 +406,7 @@ function DragGuideTracker({
       stage.off('dragmove', onMove);
       stage.off('dragend', onEnd);
     };
-  }, [stageRef, design, selectedId, onGuides]);
+  }, [stageRef, pageLayers, sharedLayers, width, height, selectedId, onGuides]);
 
   return null;
 }

@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { useEditor } from '../store';
+import { useEditor, activePage } from '../store';
 import { exportAnimation, type AnimPreset } from '../motion';
 import { downloadBlob } from '../export';
 import { PRESETS } from '../presets';
 
 export function AnimateMenu() {
   const design = useEditor((s) => s.design);
+  const pageLayers = useEditor((s) => activePage(s).layers);
+  const sharedLayers = useEditor((s) => s.design.shared);
   const updateLayer = useEditor((s) => s.updateLayer);
   const [open, setOpen] = useState(false);
   const [preset, setPreset] = useState<AnimPreset>('reveal');
@@ -29,7 +31,8 @@ export function AnimateMenu() {
   }
 
   // Layers shown top-first (paint order reversed), with their reveal step.
-  const layersTopFirst = [...design.layers].reverse();
+  const allLayers = [...pageLayers, ...sharedLayers];
+  const layersTopFirst = [...allLayers].reverse();
 
   return (
     <div className="relative">
@@ -85,7 +88,7 @@ export function AnimateMenu() {
               <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
                 {layersTopFirst.map((layer, i) => {
                   // Default shown value mirrors the auto 1-based paint-order step.
-                  const autoStep = design.layers.length - i;
+                  const autoStep = allLayers.length - i;
                   return (
                     <div key={layer.id} className="flex items-center gap-2 text-sm">
                       <span className="flex-1 truncate text-zinc-300">{layer.name}</span>
@@ -101,7 +104,7 @@ export function AnimateMenu() {
                     </div>
                   );
                 })}
-                {design.layers.length === 0 && (
+                {allLayers.length === 0 && (
                   <p className="text-sm text-zinc-500">Add some layers first.</p>
                 )}
               </div>

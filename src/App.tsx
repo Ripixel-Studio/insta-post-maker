@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Toolbar } from './components/Toolbar';
 import { PropertiesPanel } from './components/PropertiesPanel';
+import { PageBar } from './components/PageBar';
 import { CanvasStage } from './canvas/CanvasStage';
 import { useShortcuts } from './useShortcuts';
 import { usePersistence } from './usePersistence';
@@ -62,14 +63,17 @@ export default function App() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       >
-        {/* On mobile, reserve space for the bottom sheet so the canvas shrinks
-            to sit above it (no-op on desktop, where the sheet isn't used). */}
-        <main
-          className={`min-w-0 flex-1 bg-[#0b0d10] transition-[padding] duration-200 md:pb-0 ${
-            sheetOpen ? 'pb-[55vh]' : 'pb-0'
-          }`}
-        >
-          <CanvasStage />
+        <main className="flex min-w-0 flex-1 flex-col bg-[#0b0d10]">
+          <PageBar />
+          {/* On mobile, reserve space for the bottom sheet so the canvas shrinks
+              to sit above it (no-op on desktop, where the sheet isn't used). */}
+          <div
+            className={`min-h-0 flex-1 transition-[padding] duration-200 md:pb-0 ${
+              sheetOpen ? 'pb-[55vh]' : 'pb-0'
+            }`}
+          >
+            <CanvasStage />
+          </div>
         </main>
         <PropertiesPanel />
       </div>

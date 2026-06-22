@@ -1,5 +1,5 @@
 import type Konva from 'konva';
-import type { Design } from '../types';
+import type { Layer } from '../types';
 
 export interface Guide {
   axis: 'x' | 'y';
@@ -14,22 +14,24 @@ export interface Guide {
  * Nodes are centre-positioned, so node.x()/y() is the box centre.
  */
 export function computeGuides(
-  design: Design,
+  layers: Layer[],
+  width: number,
+  height: number,
   selectedId: string,
   stage?: Konva.Stage,
 ): Guide[] {
   if (!stage) return [];
   const node = stage.findOne(`#${selectedId}`);
-  const layer = design.layers.find((l) => l.id === selectedId);
+  const layer = layers.find((l) => l.id === selectedId);
   if (!node || !layer) return [];
 
   const threshold = 6 / (stage.scaleX() || 1);
   const w = layer.width;
   const h = layer.height;
 
-  const targetsX = new Set<number>([0, design.width / 2, design.width]);
-  const targetsY = new Set<number>([0, design.height / 2, design.height]);
-  for (const l of design.layers) {
+  const targetsX = new Set<number>([0, width / 2, width]);
+  const targetsY = new Set<number>([0, height / 2, height]);
+  for (const l of layers) {
     if (l.id === selectedId) continue;
     targetsX.add(l.x);
     targetsX.add(l.x + l.width / 2);

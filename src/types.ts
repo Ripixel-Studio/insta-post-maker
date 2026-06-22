@@ -180,13 +180,22 @@ export interface Collage {
   cells: CollageCell[];
 }
 
-export interface Design {
-  width: number;
-  height: number;
+/** One page (panel) of a post. The canvas size is shared across all pages. */
+export interface Page {
+  id: string;
   background: string;
   layers: Layer[];
   /** Optional collage grid, rendered beneath the free layers. */
   collage?: Collage;
+}
+
+export interface Design {
+  width: number;
+  height: number;
+  pages: Page[];
+  /** Layers shown on EVERY page (logos, footers, branding), rendered above the
+   * page's own layers. */
+  shared: Layer[];
 }
 
 export interface CanvasPreset {

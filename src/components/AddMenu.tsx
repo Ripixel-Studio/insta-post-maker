@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useEditor } from '../store';
+import { useEditor, activePage } from '../store';
 import { LAYOUTS } from '../collage';
 
 /** Compact "+ Add" dropdown used on small screens in place of the inline row
@@ -16,7 +16,7 @@ export function AddMenu({
   const addShapeLayer = useEditor((s) => s.addShapeLayer);
   const applyLayout = useEditor((s) => s.applyLayout);
   const clearCollage = useEditor((s) => s.clearCollage);
-  const hasCollage = useEditor((s) => !!s.design.collage);
+  const hasCollage = useEditor((s) => !!activePage(s).collage);
   const [open, setOpen] = useState(false);
 
   const item = 'block w-full rounded-md px-2 py-2 text-left text-sm hover:bg-white/10';

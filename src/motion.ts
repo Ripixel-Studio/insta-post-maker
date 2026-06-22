@@ -1,5 +1,6 @@
 import { exportDesign } from './export';
 import { stageHolder } from './canvas/stageHolder';
+import { useEditor, combinedLayers } from './store';
 import type { Design, Layer } from './types';
 
 export type AnimPreset = 'kenburns' | 'reveal';
@@ -112,10 +113,10 @@ async function exportKenBurns(
 const stepOf = (l: Layer, i: number) => l.animStep ?? i + 1;
 
 /** Ordered groups of layers that reveal together. */
-export function revealGroups(design: Design): Layer[][] {
-  const rank = new Map(design.layers.map((l, i) => [l.id, stepOf(l, i)]));
+export function revealGroups(layers: Layer[]): Layer[][] {
+  const rank = new Map(layers.map((l, i) => [l.id, stepOf(l, i)]));
   const steps = [...new Set([...rank.values()])].sort((a, b) => a - b);
-  return steps.map((s) => design.layers.filter((l) => rank.get(l.id) === s));
+  return steps.map((s) => layers.filter((l) => rank.get(l.id) === s));
 }
 
 /** Render a full-resolution still with only the given layers visible. The
@@ -151,7 +152,7 @@ async function exportReveal(
   });
   stage.batchDraw();
 
-  const groups = revealGroups(design);
+  const groups = revealGroups(combinedLayers(useEditor.getState()));
   const G = Math.max(1, groups.length);
 
   // Cumulative stills: stills[k] shows groups 0..k-1 (stills[0] = base only).

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useEditor } from './store';
+import { useEditor, combinedLayers } from './store';
 
 /** Returns true if focus is in a text input where keystrokes should pass through. */
 function isEditingText(target: EventTarget | null) {
@@ -13,6 +13,7 @@ export function useShortcuts() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (isEditingText(e.target)) return;
+      const state = useEditor.getState();
       const {
         undo,
         redo,
@@ -20,12 +21,11 @@ export function useShortcuts() {
         removeLayer,
         updateLayer,
         duplicateLayer,
-        design,
         select,
         cropTargetId,
         setCropTarget,
         editingTextId,
-      } = useEditor.getState();
+      } = state;
 
       // In crop mode, only allow Escape (cancel); swallow everything else so we
       // don't e.g. delete the image being cropped.
@@ -56,7 +56,7 @@ export function useShortcuts() {
       }
 
       if (!selectedId) return;
-      const layer = design.layers.find((l) => l.id === selectedId);
+      const layer = combinedLayers(state).find((l) => l.id === selectedId);
       if (!layer) return;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
