@@ -66,6 +66,9 @@ npm run lint     # eslint
 
 - `src/types.ts` — the serializable **document model** (single source of truth)
 - `src/store.ts` — zustand store + undo/redo history + ephemeral UI state
+- `src/actions.ts` — the **editor action layer**: a typed programmatic API over
+  the store/exporter (`editorActions`), plus a name-addressable tool registry
+  (`EDITOR_TOOLS` / `runAction`) so an AI Copilot can drive the real editor
 - `src/canvas/` — the Konva engine: `CanvasStage`, layer `nodes`, `CropOverlay`,
   `CollageView`, snapping `guides`
 - `src/export.ts` — full-resolution rasterisation + Web Share, independent of
