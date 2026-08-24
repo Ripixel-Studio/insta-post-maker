@@ -166,6 +166,80 @@ describe('the Copilot sees its work', () => {
   });
 });
 
+describe('legibility helpers', () => {
+  it('add_gradient_overlay defaults to a bottom-dark scrim over the lower half', () => {
+    const id = runAction('add_gradient_overlay') as string;
+    const l = editorActions.getState().design.pages[0].layers.find((x) => x.id === id) as {
+      type: string; direction: string; stops: { offset: number; color: string }[]; x: number; y: number; width: number; height: number;
+    };
+    const { design } = editorActions.getState();
+    expect(l.type).toBe('overlay');
+    expect(l.direction).toBe('to-top');
+    expect(l.stops[0].color).toBe('rgba(0,0,0,0.85)');
+    expect(l.stops[1].color).toBe('rgba(0,0,0,0)');
+    expect([l.x, l.y, l.width, l.height]).toEqual([0, design.height / 2, design.width, design.height / 2]);
+    expect(editorActions.getSnapshot().pages[0].layers[0]).toMatchObject({ type: 'overlay', direction: 'to-top' });
+  });
+
+  it('honours colour, strength, direction and box', () => {
+    const id = editorActions.addGradientOverlay({ color: '#123456', strength: 0.5, direction: 'to-bottom', y: 0, height: 300 });
+    const l = editorActions.getState().design.pages[0].layers.find((x) => x.id === id) as {
+      direction: string; stops: { color: string }[]; y: number; height: number;
+    };
+    expect(l.direction).toBe('to-bottom');
+    expect(l.stops[0].color).toBe('rgba(18,52,86,0.5)');
+    expect([l.y, l.height]).toEqual([0, 300]);
+  });
+
+  it('add_shape makes a plate with fill and opacity', () => {
+    const id = runAction('add_shape', { shape: 'rect', fill: '#000000', opacity: 0.6, x: 10, y: 20, width: 200, height: 80, cornerRadius: 0 }) as string;
+    const l = editorActions.getState().design.pages[0].layers.find((x) => x.id === id) as {
+      type: string; shape: string; fill: string; opacity: number; cornerRadius: number; width: number;
+    };
+    expect(l).toMatchObject({ type: 'shape', shape: 'rect', fill: '#000000', opacity: 0.6, cornerRadius: 0, width: 200 });
+    expect(editorActions.getSnapshot().pages[0].layers[0]).toMatchObject({ type: 'shape', shape: 'rect', fill: '#000000' });
+  });
+});
+
+describe('the Copilot keeps going', () => {
+  it('nudges a max_tokens-truncated reply to continue instead of stopping', async () => {
+    const send = scripted([
+      { content: [{ type: 'text', text: 'Now I will add the' }], stopReason: 'max_tokens' },
+      { content: [toolUse('t1', 'add_text', { text: 'Title' })], stopReason: 'tool_use' },
+      { content: [{ type: 'text', text: 'Done.' }], stopReason: 'end_turn' },
+    ]);
+    const execute = vi.fn(async () => ({ content: 'layer_1', isError: false }));
+    const messages: ClaudeMessage[] = [{ role: 'user', content: 'go' }];
+    const res = await runCopilot(messages, { apiKey: 'k', system: 's', tools: [], send, execute, preview: async () => null });
+    expect(res.status).toBe('done');
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(messages[2]).toMatchObject({ role: 'user' });
+    expect(String(messages[2].content)).toMatch(/cut off/);
+    expect(send).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives up nudging after two truncated replies in a row', async () => {
+    const send = scripted([{ content: [{ type: 'text', text: '…' }], stopReason: 'max_tokens' }]);
+    const messages: ClaudeMessage[] = [{ role: 'user', content: 'go' }];
+    await runCopilot(messages, { apiKey: 'k', system: 's', tools: [], send, execute: vi.fn(), preview: async () => null });
+    expect(send).toHaveBeenCalledTimes(3); // original + 2 continuations
+  });
+
+  it('tells the user when the step cap pauses the build', async () => {
+    const send = scripted([{ content: [toolUse('t', 'add_text', { text: 'x' })], stopReason: 'tool_use' }]);
+    const execute = vi.fn(async () => ({ content: 'ok', isError: false }));
+    const texts: string[] = [];
+    const messages: ClaudeMessage[] = [{ role: 'user', content: 'go' }];
+    await runCopilot(messages, {
+      apiKey: 'k', system: 's', tools: [], send, execute, preview: async () => null, maxSteps: 3,
+      onEvent: (e) => { if (e.type === 'assistant_text') texts.push(e.text); },
+    });
+    expect(execute).toHaveBeenCalledTimes(3);
+    expect(texts[texts.length - 1]).toMatch(/Paused after 3 steps/);
+    expect(messages[messages.length - 1].role).toBe('user'); // consistent: ends on tool results
+  });
+});
+
 describe('the style profile is binding', () => {
   const RAW = JSON.stringify({
     summary: 'Clean athletic posts.',

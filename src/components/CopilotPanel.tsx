@@ -6,6 +6,7 @@ import {
   buildCopilotSystemPrompt,
   buildResumeMessage,
   runCopilot,
+  STEP_CAP_NOTICE,
   type CopilotEvent,
   type PendingInput,
 } from '../ai/copilot';
@@ -68,6 +69,12 @@ export function CopilotPanel() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingInput | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // What the Copilot is doing right now, in words the user can see at a glance.
+  // "Is it working or has it stopped?" was not answerable from the transcript.
+  type Outcome = 'idle' | 'working' | 'done' | 'awaiting' | 'paused' | 'stopped' | 'error';
+  const [outcome, setOutcome] = useState<Outcome>('idle');
+  const [stepCount, setStepCount] = useState(0);
+  const [lastTool, setLastTool] = useState<string | null>(null);
 
   // Conversation history (the API messages) and the photos already shown to the
   // model — kept in refs so they survive re-renders without re-encoding.
@@ -125,8 +132,14 @@ export function CopilotPanel() {
   }
 
   function onEvent(e: CopilotEvent) {
-    if (e.type === 'assistant_text') addItem({ kind: 'assistant', text: e.text });
-    else if (e.type === 'tool_call')
+    if (e.type === 'tool_call') {
+      setStepCount((n) => n + 1);
+      setLastTool(e.name.replace(/_/g, ' '));
+    }
+    if (e.type === 'assistant_text') {
+      addItem({ kind: 'assistant', text: e.text });
+      if (e.text === STEP_CAP_NOTICE.replace('{n}', String(40)) || e.text.startsWith('⏸ Paused')) setOutcome('paused');
+    } else if (e.type === 'tool_call')
       addItem({ kind: 'tool', name: e.name, summary: toolSummary(e.name, e.input), isError: false });
     else if (e.type === 'tool_result' && e.isError)
       addItem({ kind: 'tool', name: e.name, summary: `${e.name}: ${e.content}`, isError: true });
@@ -153,8 +166,12 @@ export function CopilotPanel() {
   async function drive() {
     setBusy(true);
     setError(null);
+    setOutcome('working');
+    setStepCount(0);
+    setLastTool(null);
     const controller = new AbortController();
     abortRef.current = controller;
+    let ended: Outcome = 'done';
     try {
       const result = await runCopilot(messagesRef.current, {
         apiKey: aiKey,
@@ -167,7 +184,10 @@ export function CopilotPanel() {
       const nextPending = result.status === 'awaiting_input' ? result.pending : null;
       setPending(nextPending);
       persist(itemsRef.current, nextPending);
+      if (controller.signal.aborted) ended = 'stopped';
+      else if (nextPending) ended = 'awaiting';
     } catch (err) {
+      ended = 'error';
       setError(err instanceof AiError ? err.message : 'The Copilot hit a problem. Try again.');
       // The history is still worth keeping (the user's message is in it); a
       // half-finished assistant turn is trimmed on load.
@@ -175,7 +195,17 @@ export function CopilotPanel() {
     } finally {
       setBusy(false);
       abortRef.current = null;
+      // 'paused' is set from the step-cap notice event; don't overwrite it.
+      setOutcome((o) => (o === 'paused' && ended === 'done' ? 'paused' : ended));
     }
+  }
+
+  /** One click to resume after a pause, a stop or a finished turn. */
+  async function continueBuild() {
+    if (busy) return;
+    addItem({ kind: 'user', text: 'Continue' });
+    messagesRef.current.push({ role: 'user', content: 'Continue where you left off. Finish the post; ask only if you must.' });
+    await drive();
   }
 
   async function submit() {
@@ -209,6 +239,9 @@ export function CopilotPanel() {
     setPending(null);
     setError(null);
     setInput('');
+    setOutcome('idle');
+    setStepCount(0);
+    setLastTool(null);
     void clearSession();
   }
 
@@ -295,8 +328,43 @@ export function CopilotPanel() {
               {items.map((it) => (
                 <TranscriptItem key={it.id} item={it} />
               ))}
-              {busy && <p className="text-sm text-zinc-500">Working…</p>}
               {error && <p className="text-sm text-amber-400">{error}</p>}
+            </div>
+
+            {/* Status — always visible, so "is it working?" has an answer */}
+            <div
+              className={`flex items-center gap-2 border-t border-white/10 px-4 py-2 text-xs ${
+                outcome === 'working' ? 'bg-violet-500/10 text-violet-200' :
+                outcome === 'awaiting' ? 'bg-amber-500/10 text-amber-200' :
+                outcome === 'error' ? 'bg-red-500/10 text-red-200' :
+                'bg-black/20 text-zinc-400'
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              {outcome === 'working' && (
+                <>
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-violet-400" />
+                  <span>
+                    Working · step {stepCount}
+                    {lastTool ? ` · ${lastTool}` : ''}
+                  </span>
+                </>
+              )}
+              {outcome === 'idle' && <span>Ready — tell me what to build.</span>}
+              {outcome === 'done' && <span>✓ Finished this turn — your move.</span>}
+              {outcome === 'awaiting' && <span>❓ Waiting for your answer below.</span>}
+              {outcome === 'paused' && <span>⏸ Paused at the step limit.</span>}
+              {outcome === 'stopped' && <span>■ Stopped.</span>}
+              {outcome === 'error' && <span>⚠ Hit a problem — see above.</span>}
+              {!busy && (outcome === 'done' || outcome === 'paused' || outcome === 'stopped') && (
+                <button
+                  className="ml-auto rounded bg-white/10 px-2 py-1 text-[11px] text-zinc-100 hover:bg-white/20"
+                  onClick={() => void continueBuild()}
+                >
+                  Continue ▸
+                </button>
+              )}
             </div>
 
             {/* Composer */}
