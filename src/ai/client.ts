@@ -77,7 +77,9 @@ export interface CompleteOptions {
   /** Hard cap on the response length. Required by the API; defaults sensibly. */
   maxTokens?: number;
   system?: string;
-  temperature?: number;
+  // No `temperature`: Claude 5-family models reject it as deprecated
+  // ("`temperature` is deprecated for this model"), and every call here
+  // wants the default anyway.
   /** Tools the model may call. Presence flips the reply into the tool-use loop. */
   tools?: AnthropicTool[];
   /** e.g. `{ type: 'auto' }` (default) or `{ type: 'any' }`. */
@@ -124,7 +126,6 @@ export function buildRequest(
     max_tokens: opts.maxTokens ?? 1024,
     messages,
     ...(opts.system ? { system: opts.system } : {}),
-    ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
     ...(opts.tools ? { tools: opts.tools } : {}),
     ...(opts.toolChoice ? { tool_choice: opts.toolChoice } : {}),
   };

@@ -47,7 +47,8 @@ describe('buildRequest', () => {
     expect(body.model).toBe(DEFAULT_MODEL);
     expect(body.max_tokens).toBe(1024);
     expect(body.messages).toEqual([{ role: 'user', content: 'hi' }]);
-    // Optional fields omitted when not provided.
+    // Optional fields omitted when not provided; temperature is never sent
+    // (deprecated on current models).
     expect(body.system).toBeUndefined();
     expect(body.temperature).toBeUndefined();
   });
@@ -65,18 +66,16 @@ describe('buildRequest', () => {
     expect(body.tool_choice).toEqual({ type: 'auto' });
   });
 
-  it('passes through model / system / temperature / maxTokens overrides', () => {
+  it('passes through model / system / maxTokens overrides', () => {
     const { init } = buildRequest('sk-ant-x', [{ role: 'user', content: 'hi' }], {
       model: 'claude-opus-4-8',
       system: 'be terse',
-      temperature: 0.2,
       maxTokens: 16,
     });
     const body = JSON.parse(init.body as string);
     expect(body).toMatchObject({
       model: 'claude-opus-4-8',
       system: 'be terse',
-      temperature: 0.2,
       max_tokens: 16,
     });
   });

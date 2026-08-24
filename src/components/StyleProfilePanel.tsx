@@ -123,8 +123,9 @@ export function StyleProfilePanel() {
             <div className="flex flex-col gap-4 overflow-y-auto p-4">
               <p className="text-sm text-zinc-400">
                 Upload a few <strong className="text-zinc-300">finished posts you're happy with</strong>{' '}
-                and Claude will distil the style they share — palette, typography, mood and caption
-                voice — into a reusable profile stored{' '}
+                — every panel of a carousel counts, add them in order — and Claude will distil the
+                style they share — palette, typography, mood and caption voice — into a reusable
+                profile stored{' '}
                 <strong className="text-zinc-300">only on this device</strong>. Future AI suggestions
                 can then stay on-brand.
               </p>
@@ -137,7 +138,7 @@ export function StyleProfilePanel() {
               {/* Sample picker */}
               <div className="flex flex-col gap-2">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-                  {profile ? 'Re-distil from new posts' : 'Example posts'} · up to {MAX_SAMPLE_POSTS}
+                  {profile ? 'Re-distil from new posts' : 'Example posts / panels'} · up to {MAX_SAMPLE_POSTS} images
                 </p>
 
                 {samples.length > 0 && (

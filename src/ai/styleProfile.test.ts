@@ -46,7 +46,7 @@ describe('buildStyleMessages', () => {
     expect(msgs).toHaveLength(1);
     expect(msgs[0].role).toBe('user');
     const content = msgs[0].content as unknown as Array<Record<string, unknown>>;
-    expect(content[0]).toEqual({ type: 'text', text: expect.stringContaining('2 finished example posts') });
+    expect(content[0]).toEqual({ type: 'text', text: expect.stringContaining('2 images from finished example posts') });
     expect(content[1]).toEqual({
       type: 'image',
       source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' },
@@ -152,11 +152,11 @@ describe('distillStyleProfile', () => {
     const fetchSpy = vi.fn().mockResolvedValue(jsonResponse({ content: [{ type: 'text', text: RAW }] }));
     vi.stubGlobal('fetch', fetchSpy);
 
-    const many = Array.from({ length: 20 }, () => IMG);
+    const many = Array.from({ length: 60 }, () => IMG);
     const profile = await distillStyleProfile('sk-ant-x', many, { now: 1 });
-    expect(profile.sampleCount).toBe(8);
+    expect(profile.sampleCount).toBe(40);
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.messages[0].content).toHaveLength(9); // intro + 8 images
+    expect(body.messages[0].content).toHaveLength(41); // intro + 40 images
   });
 
   it('rejects an empty post list before touching the network', async () => {
