@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useEditor } from './store';
-import { hydrateAssets, nextId } from './assets';
+import { hydrateAssets, nextId, getAsset } from './assets';
 import { hydrateFonts } from './fonts';
 import { loadStoredKey } from './ai/storage';
 import { reviveStyleProfile } from './ai/styleProfile';
@@ -15,6 +15,7 @@ import {
 } from './persistence';
 
 const ACTIVE_KEY = 'activeProjectId';
+const TRAY_KEY = 'tray';
 
 /**
  * Wires the editor to IndexedDB: on startup it rehydrates image assets and
@@ -33,11 +34,25 @@ export function usePersistence() {
       const brandJson = await getMeta('brandColors');
       const storedKey = await loadStoredKey();
       const styleJson = await getMeta('styleProfile');
+      const trayJson = await getMeta(TRAY_KEY);
       if (!cancelled) {
         const { addCustomFont, setBrandColors, setAiKey, setStyleProfile } = useEditor.getState();
         fontFamilies.forEach(addCustomFont);
         setAiKey(storedKey);
         if (styleJson) setStyleProfile(reviveStyleProfile(styleJson));
+        // The tray (bulk-imported photos not yet placed) is UI state, not part
+        // of the design, but losing it on a reload meant re-importing. Restore
+        // the ids that still resolve to a hydrated asset.
+        if (trayJson) {
+          try {
+            const ids = (JSON.parse(trayJson) as unknown[]).filter(
+              (id): id is string => typeof id === 'string' && Boolean(getAsset(id)),
+            );
+            if (ids.length) useEditor.setState({ tray: ids });
+          } catch {
+            /* ignore malformed */
+          }
+        }
         if (brandJson) {
           try {
             setBrandColors(JSON.parse(brandJson));
@@ -94,6 +109,16 @@ export function usePersistence() {
       clearTimeout(timer);
       unsub();
     };
+  }, []);
+
+  // --- Persist the tray whenever it changes ---
+  useEffect(() => {
+    const unsub = useEditor.subscribe((state, prev) => {
+      if (!loadedRef.current) return;
+      if (state.tray === prev.tray) return;
+      void setMeta(TRAY_KEY, JSON.stringify(state.tray));
+    });
+    return unsub;
   }, []);
 
   // --- Persist the brand palette whenever it changes ---
