@@ -5,12 +5,14 @@ import { PageBar } from './components/PageBar';
 import { PagesOverview } from './components/PagesOverview';
 import { EraseOverlay } from './components/EraseOverlay';
 import { MobileShell } from './components/MobileShell';
+import { ImageTray } from './components/ImageTray';
 import { CanvasStage } from './canvas/CanvasStage';
 import { useShortcuts } from './useShortcuts';
 import { usePersistence } from './usePersistence';
 import { loadFonts } from './fonts';
 import { useEditor } from './store';
 import { addImageAsset } from './assets';
+import { importFilesSmart } from './bulkImport';
 
 export default function App() {
   useShortcuts();
@@ -45,18 +47,13 @@ export default function App() {
     return () => window.removeEventListener('paste', onPaste);
   }, [addImageLayer]);
 
-  // Drag-and-drop images anywhere onto the workspace.
-  async function onDrop(e: React.DragEvent) {
+  // Drag-and-drop images anywhere onto the workspace. A single photo drops
+  // straight onto the canvas; a batch is staged in the image tray instead of
+  // landing as a pile of stacked layers.
+  function onDrop(e: React.DragEvent) {
+    if (e.dataTransfer.files.length === 0) return;
     e.preventDefault();
-    for (const file of Array.from(e.dataTransfer.files)) {
-      if (!file.type.startsWith('image/')) continue;
-      try {
-        const asset = await addImageAsset(file);
-        addImageLayer(asset.id);
-      } catch (err) {
-        console.error(err);
-      }
-    }
+    void importFilesSmart(e.dataTransfer.files);
   }
 
   return (
@@ -82,6 +79,10 @@ export default function App() {
             }`}
           >
             {viewAll ? <PagesOverview /> : <CanvasStage />}
+          </div>
+          {/* Image tray — desktop staging shelf for bulk photo import. */}
+          <div className="hidden md:block">
+            <ImageTray />
           </div>
           {!viewAll && <MobileShell />}
         </main>
