@@ -134,3 +134,7 @@ export async function getMeta(key: string): Promise<string | undefined> {
 export async function setMeta(key: string, value: string): Promise<void> {
   await db.meta.put({ key, value });
 }
+
+export async function deleteMeta(key: string): Promise<void> {
+  await db.meta.delete(key);
+}

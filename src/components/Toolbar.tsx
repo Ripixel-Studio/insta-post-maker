@@ -18,6 +18,7 @@ import { FitGlueImport } from './FitGlueImport';
 import { EmojiPicker } from './EmojiPicker';
 import { AddMenu } from './AddMenu';
 import { HelpOverlay } from './HelpOverlay';
+import { AiSettings } from './AiSettings';
 import { LAYOUTS } from '../collage';
 import { promptAddQrCode } from '../qr';
 
@@ -231,6 +232,9 @@ export function Toolbar() {
 
       {/* Export controls pushed to the right */}
       <div className="ml-auto flex items-center gap-2">
+        <span className="hidden md:inline-flex">
+          <AiSettings />
+        </span>
         <span className="hidden md:inline-flex">
           <HelpOverlay />
         </span>
