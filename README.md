@@ -76,6 +76,11 @@ npm run lint     # eslint
   `CollageView`, snapping `guides`
 - `src/export.ts` — full-resolution rasterisation + Web Share, independent of
   the on-screen display scale
+- `src/ai/` — bring-your-own-key Claude client (`client.ts`), on-device key
+  storage + gating (`storage.ts`, `AiGate`), and **style profile**
+  (`styleProfile.ts`): distil a reusable, on-device style profile from a few of
+  your finished example posts via a Claude-vision pass, injectable into future
+  prompts through `styleProfileToPromptText`
 - `src/persistence.ts` / `src/usePersistence.ts` — Dexie/IndexedDB projects + assets
 - `src/collage.ts` — collage templates and cell geometry
 - `src/filters.ts` — adjustment presets; `src/fonts.ts` — Google-CDN font set

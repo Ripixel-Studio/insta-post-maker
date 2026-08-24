@@ -3,9 +3,11 @@ import { useEditor } from './store';
 import { hydrateAssets, nextId } from './assets';
 import { hydrateFonts } from './fonts';
 import { loadStoredKey } from './ai/storage';
+import { reviveStyleProfile } from './ai/styleProfile';
 import {
   getMeta,
   setMeta,
+  deleteMeta,
   getProject,
   putProject,
   listProjects,
@@ -30,10 +32,12 @@ export function usePersistence() {
       const fontFamilies = await hydrateFonts();
       const brandJson = await getMeta('brandColors');
       const storedKey = await loadStoredKey();
+      const styleJson = await getMeta('styleProfile');
       if (!cancelled) {
-        const { addCustomFont, setBrandColors, setAiKey } = useEditor.getState();
+        const { addCustomFont, setBrandColors, setAiKey, setStyleProfile } = useEditor.getState();
         fontFamilies.forEach(addCustomFont);
         setAiKey(storedKey);
+        if (styleJson) setStyleProfile(reviveStyleProfile(styleJson));
         if (brandJson) {
           try {
             setBrandColors(JSON.parse(brandJson));
@@ -98,6 +102,17 @@ export function usePersistence() {
       if (!loadedRef.current) return;
       if (state.brandColors === prev.brandColors) return;
       void setMeta('brandColors', JSON.stringify(state.brandColors));
+    });
+    return unsub;
+  }, []);
+
+  // --- Persist the distilled style profile whenever it changes ---
+  useEffect(() => {
+    const unsub = useEditor.subscribe((state, prev) => {
+      if (!loadedRef.current) return;
+      if (state.styleProfile === prev.styleProfile) return;
+      if (state.styleProfile) void setMeta('styleProfile', JSON.stringify(state.styleProfile));
+      else void deleteMeta('styleProfile');
     });
     return unsub;
   }, []);
