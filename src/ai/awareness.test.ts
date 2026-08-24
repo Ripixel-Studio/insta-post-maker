@@ -76,7 +76,7 @@ describe('the Copilot sees its work', () => {
     expect(changesCanvas('fitglue_load_activity')).toBe(false);
   });
 
-  it('attaches one rendered preview after a step that edited the canvas', async () => {
+  it('attaches one rendered preview once enough edits have accumulated', async () => {
     const send = scripted([
       { content: [toolUse('t1', 'add_text', { text: 'Hi' }), toolUse('t2', 'add_text', { text: 'Yo' })], stopReason: 'tool_use' },
       { content: [{ type: 'text', text: 'Done!' }], stopReason: 'end_turn' },
@@ -84,7 +84,7 @@ describe('the Copilot sees its work', () => {
     const preview = vi.fn(async () => IMG);
     const execute = vi.fn(async () => ({ content: 'layer_1', isError: false }));
     const messages: ClaudeMessage[] = [{ role: 'user', content: 'build it' }];
-    await runCopilot(messages, { apiKey: 'k', system: 's', tools: [], send, execute, preview });
+    await runCopilot(messages, { apiKey: 'k', system: 's', tools: [], send, execute, preview, previewEvery: 2 });
 
     expect(preview).toHaveBeenCalledTimes(1);
     const results = messages[2].content as ToolResultBlock[];
@@ -92,6 +92,24 @@ describe('the Copilot sees its work', () => {
     expect(results[0].content).toBe('layer_1'); // untouched
     const last = results[1].content as { type: string }[];
     expect(last.map((b) => b.type)).toEqual(['text', 'text', 'image']);
+  });
+
+  it('batches: no auto preview until previewEvery edits, then resets', async () => {
+    const edit = (id: string) => toolUse(id, 'add_text', { text: id });
+    const send = scripted([
+      { content: [edit('a'), edit('b')], stopReason: 'tool_use' },          // 2 edits: no preview
+      { content: [edit('c'), edit('d'), edit('e')], stopReason: 'tool_use' }, // 5 edits: preview, reset
+      { content: [edit('f')], stopReason: 'tool_use' },                     // 1 edit: no preview
+      { content: [{ type: 'text', text: 'Done' }], stopReason: 'end_turn' },
+    ]);
+    const preview = vi.fn(async () => IMG);
+    const execute = vi.fn(async () => ({ content: 'ok', isError: false }));
+    const messages: ClaudeMessage[] = [{ role: 'user', content: 'go' }];
+    await runCopilot(messages, { apiKey: 'k', system: 's', tools: [], send, execute, preview });
+    expect(preview).toHaveBeenCalledTimes(1);
+    expect(typeof (messages[2].content as ToolResultBlock[])[1].content).toBe('string');
+    expect(Array.isArray((messages[4].content as ToolResultBlock[])[2].content)).toBe(true);
+    expect(typeof (messages[6].content as ToolResultBlock[])[0].content).toBe('string');
   });
 
   it('does not render a preview for read-only steps', async () => {
@@ -129,7 +147,7 @@ describe('the Copilot sees its work', () => {
     ]);
     const execute = vi.fn(async () => ({ content: 'layer_1', isError: false }));
     const messages: ClaudeMessage[] = [{ role: 'user', content: 'go' }];
-    await runCopilot(messages, { apiKey: 'k', system: 's', tools: [], send, execute, preview: async () => null });
+    await runCopilot(messages, { apiKey: 'k', system: 's', tools: [], send, execute, preview: async () => null, previewEvery: 1 });
     expect((messages[2].content as ToolResultBlock[])[0].content).toBe('layer_1');
   });
 
@@ -139,7 +157,7 @@ describe('the Copilot sees its work', () => {
     ]);
     const execute = vi.fn(async () => ({ content: 'ok', isError: false }));
     const messages: ClaudeMessage[] = [{ role: 'user', content: 'go' }];
-    const res = await runCopilot(messages, { apiKey: 'k', system: 's', tools: [], send, execute, preview: async () => IMG });
+    const res = await runCopilot(messages, { apiKey: 'k', system: 's', tools: [], send, execute, preview: async () => IMG, previewEvery: 1 });
     expect(res.status).toBe('awaiting_input');
     if (res.status === 'awaiting_input') {
       const blocks = res.pending.toolResults[0].content as { type: string }[];
@@ -178,7 +196,7 @@ describe('the style profile is binding', () => {
     expect(text).toContain('Never: text over faces; heavy filters');
     const system = buildCopilotSystemPrompt(p);
     expect(system).toMatch(/STYLE PROFILE .* is binding/);
-    expect(system).toMatch(/LOOK AT YOUR WORK/);
+    expect(system).toMatch(/WORK IN BATCHES, THEN LOOK/);
     expect(system).toContain('Text usage (binding)');
   });
 });

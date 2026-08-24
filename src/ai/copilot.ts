@@ -78,7 +78,7 @@ export const PREVIEW_TOOL_NAME = 'preview_page';
 export const PREVIEW_TOOL: AnthropicTool = {
   name: PREVIEW_TOOL_NAME,
   description:
-    'Render the active page as an image so you can check the result of your edits (readability, overlap, off-canvas layers, photo tone). A preview is also attached automatically after every editing step.',
+    'Render the active page as an image so you can check the result of your edits (readability, overlap, off-canvas layers, photo tone). Call it once per finished panel and once before export — not after every edit.',
   input_schema: { type: 'object', properties: {} },
 };
 
@@ -143,11 +143,14 @@ export function buildCopilotSystemPrompt(profile: StyleProfile | null): string {
     '- Call get_snapshot before acting on existing layers/pages/cells to learn their ids',
     '  AND their positions. It returns every layer\'s box (x, y, width, height in canvas px,',
     '  origin top-left). Ids you invent will be rejected.',
-    '- LOOK AT YOUR WORK. After each editing step you receive a rendered preview of the',
-    '  active page. Study it before the next step: is every text readable and inside the',
-    '  canvas, nothing overlapping or covering faces, do photos look natural (not dark, not',
-    '  washed out, skin tones true)? If anything is wrong, fix it FIRST. You can also call',
-    '  preview_page at any time.',
+    '- WORK IN BATCHES, THEN LOOK. Build a whole panel in one go — issue several tool calls',
+    '  in the same turn (layout, photos, crops, stats, text) rather than one per turn. Then',
+    '  call preview_page ONCE for that panel and study it: is every text readable and inside',
+    '  the canvas, nothing overlapping or covering faces, do photos look natural (not dark,',
+    '  not washed out, skin tones true)? Fix what is wrong, then move to the next panel. Do a',
+    '  final preview_page of each page before offering export. Do not preview after every',
+    '  single edit — it is slow. (A preview is also attached automatically after a run of',
+    '  several edits.)',
     '- Placement: keep everything inside the canvas with a margin of at least 4% of the',
     '  width; never place text over a busy area or a face; align to a consistent grid.',
     '- Photos look best untouched. Do not apply filters or adjustments by default. If one',
@@ -266,7 +269,14 @@ export interface CopilotDeps {
   /** Injectable for tests; defaults to {@link renderPreviewImage}. Returning
    * null skips the preview for that step. */
   preview?: () => Promise<StyleImage | null>;
+  /** Auto-attach a preview once this many canvas-changing calls have run
+   * since the last preview (explicit preview_page resets the count). Previewing
+   * after every single edit doubled the wall-clock of a build; batching keeps
+   * the safety net without the drag. */
+  previewEvery?: number;
 }
+
+export const DEFAULT_PREVIEW_EVERY = 5;
 
 const DEFAULT_MAX_STEPS = 24;
 
@@ -286,6 +296,8 @@ export async function runCopilot(
   const send = deps.send ?? ((k, m, o) => createMessage(k, m, o));
   const execute = deps.execute ?? executeEditorTool;
   const preview = deps.preview ?? renderPreviewImage;
+  const previewEvery = Math.max(1, deps.previewEvery ?? DEFAULT_PREVIEW_EVERY);
+  let editsSincePreview = 0;
   const maxSteps = deps.maxSteps ?? DEFAULT_MAX_STEPS;
   const emit = (e: CopilotEvent) => deps.onEvent?.(e);
 
@@ -329,12 +341,14 @@ export async function runCopilot(
         content: res.content,
         ...(res.isError ? { is_error: true } : {}),
       });
-      if (!res.isError && changesCanvas(use.name) && !previewNeeded) previewNeeded = 'auto';
+      if (!res.isError && changesCanvas(use.name)) editsSincePreview += 1;
     }
+    if (!previewNeeded && editsSincePreview >= previewEvery) previewNeeded = 'auto';
 
-    // The model must see what it just did. One preview per step, attached to
-    // the last tool_result (tool_result content may carry image blocks).
+    // The model must see what it did — but in batches. One preview per step at
+    // most, attached to the last tool_result (its content may carry images).
     if (previewNeeded && toolResults.length) {
+      editsSincePreview = 0;
       const img = await preview();
       if (img) {
         emit({ type: 'preview', reason: previewNeeded });
