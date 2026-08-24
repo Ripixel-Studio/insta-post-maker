@@ -89,4 +89,12 @@ export function getAsset(id: string): Asset | undefined {
   return assets.get(id);
 }
 
+/** Every image asset currently in the registry (placed, trayed or hydrated),
+ * newest last. Used by the Copilot to know which photos it can see and use. */
+export function listAssets(): Asset[] {
+  return [...assets.values()];
+}
+
+export type { Asset };
+
 export { nextId };

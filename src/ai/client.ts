@@ -34,11 +34,42 @@ export interface ImageBlock {
   source: { type: 'base64'; media_type: string; data: string };
 }
 
-export type ContentBlock = TextBlock | ImageBlock;
+/** A model request to call one of the tools we advertised. Appears in an
+ * assistant reply when `stop_reason` is `tool_use`. */
+export interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+/** Our answer to a {@link ToolUseBlock}, sent back in the next user turn. The
+ * `content` mirrors what a normal message can carry, so a tool may hand images
+ * (vision) straight back to the model. */
+export interface ToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string | ContentBlock[];
+  is_error?: boolean;
+}
+
+export type ContentBlock = TextBlock | ImageBlock | ToolUseBlock | ToolResultBlock;
 
 export interface ClaudeMessage {
   role: 'user' | 'assistant';
   content: string | ContentBlock[];
+}
+
+/** A tool advertised to the model. `input_schema` is JSON Schema — the same
+ * minimal dialect the editor's own tool registry emits. */
+export interface AnthropicTool {
+  name: string;
+  description: string;
+  input_schema: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
 }
 
 export interface CompleteOptions {
@@ -47,7 +78,18 @@ export interface CompleteOptions {
   maxTokens?: number;
   system?: string;
   temperature?: number;
+  /** Tools the model may call. Presence flips the reply into the tool-use loop. */
+  tools?: AnthropicTool[];
+  /** e.g. `{ type: 'auto' }` (default) or `{ type: 'any' }`. */
+  toolChoice?: { type: 'auto' | 'any' | 'tool'; name?: string };
   signal?: AbortSignal;
+}
+
+/** A whole assistant reply: its content blocks and why it stopped. `end_turn`
+ * = finished; `tool_use` = it wants us to run tools and continue. */
+export interface MessageResponse {
+  content: ContentBlock[];
+  stopReason: string | null;
 }
 
 /** Thrown for any non-2xx response (or a network failure). `message` is safe to
@@ -83,6 +125,8 @@ export function buildRequest(
     messages,
     ...(opts.system ? { system: opts.system } : {}),
     ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
+    ...(opts.tools ? { tools: opts.tools } : {}),
+    ...(opts.toolChoice ? { tool_choice: opts.toolChoice } : {}),
   };
   return {
     url: ENDPOINT,
@@ -120,14 +164,16 @@ function describeError(status: number, payload: unknown): string {
 }
 
 /**
- * Send a conversation to Claude and return the concatenated text of the reply.
- * Throws {@link AiError} on any failure.
+ * Send a conversation to Claude and return the full reply (content blocks +
+ * stop reason). This is the low-level entry point the tool-use loop drives;
+ * {@link complete} is the text-only convenience on top. Throws {@link AiError}
+ * on any failure.
  */
-export async function complete(
+export async function createMessage(
   apiKey: string,
   messages: ClaudeMessage[],
   opts: CompleteOptions = {},
-): Promise<string> {
+): Promise<MessageResponse> {
   if (!apiKey.trim()) throw new AiError('No API key set.');
   const { url, init } = buildRequest(apiKey, messages, opts);
 
@@ -156,12 +202,30 @@ export async function complete(
     throw new AiError(describeError(res.status, payload), { status: res.status, apiType });
   }
 
-  const content = (payload as { content?: ContentBlock[] })?.content ?? [];
+  const p = payload as { content?: ContentBlock[]; stop_reason?: string | null };
+  return { content: p?.content ?? [], stopReason: p?.stop_reason ?? null };
+}
+
+/** Concatenate the text blocks of a reply, ignoring any non-text content. */
+export function replyText(content: ContentBlock[]): string {
   return content
     .filter((b): b is TextBlock => b.type === 'text')
     .map((b) => b.text)
     .join('')
     .trim();
+}
+
+/**
+ * Send a conversation to Claude and return the concatenated text of the reply.
+ * Throws {@link AiError} on any failure.
+ */
+export async function complete(
+  apiKey: string,
+  messages: ClaudeMessage[],
+  opts: CompleteOptions = {},
+): Promise<string> {
+  const { content } = await createMessage(apiKey, messages, opts);
+  return replyText(content);
 }
 
 /**
