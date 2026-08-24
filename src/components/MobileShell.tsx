@@ -10,6 +10,8 @@ import { FitGlueImport } from './FitGlueImport';
 import { AnimateMenu } from './AnimateMenu';
 import { HelpOverlay } from './HelpOverlay';
 import { AiSettings } from './AiSettings';
+import { StyleProfilePanel } from './StyleProfilePanel';
+import { AiGate } from '../ai/AiGate';
 import { EmojiPicker } from './EmojiPicker';
 import { PageBar } from './PageBar';
 import { PRESETS } from '../presets';
@@ -191,6 +193,9 @@ export function MobileShell() {
           <FitGlueImport />
           {canRecordVideo() && <AnimateMenu />}
           <AiSettings />
+          <AiGate>
+            <StyleProfilePanel />
+          </AiGate>
           <HelpOverlay />
         </div>
         <p className="mt-2 text-[10px] uppercase tracking-wide text-zinc-500">Resize (reflow)</p>

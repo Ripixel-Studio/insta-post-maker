@@ -18,6 +18,7 @@ import { NO_FILTERS } from './types';
 import { DEFAULT_PRESET } from './presets';
 import { nextId, getAsset } from './assets';
 import type { ImportProgress } from './bulkImport';
+import type { StyleProfile } from './ai/styleProfile';
 
 export function emptyPage(): Page {
   return { id: nextId('page'), background: '#1b1d22', layers: [], collage: undefined };
@@ -184,6 +185,12 @@ interface EditorState {
   aiKey: string;
   setAiKey: (key: string) => void;
 
+  /** A style profile distilled from the user's own example posts (null until
+   * they run the vision pass). Persisted on-device via `src/persistence.ts` and
+   * reusable by any AI surface through `styleProfileToPromptText`. */
+  styleProfile: StyleProfile | null;
+  setStyleProfile: (profile: StyleProfile | null) => void;
+
   setPreset: (preset: CanvasPreset) => void;
   setCanvasSize: (width: number, height: number) => void;
   magicResize: (width: number, height: number) => void;
@@ -338,6 +345,8 @@ export const useEditor = create<EditorState>((set, get) => {
     removeBrandColor: (color) => set((s) => ({ brandColors: s.brandColors.filter((c) => c !== color) })),
     aiKey: '',
     setAiKey: (key) => set({ aiKey: key.trim() }),
+    styleProfile: null,
+    setStyleProfile: (profile) => set({ styleProfile: profile }),
     addCustomFont: (family) =>
       set((s) => ({ customFonts: s.customFonts.includes(family) ? s.customFonts : [...s.customFonts, family] })),
     pushRecentColor: (color) =>
