@@ -11,8 +11,25 @@ This app is a purely static, client-side SPA. It builds with `npm run build` int
 
 The first deploy was done manually with the Firebase CLI (logged in as
 ripixel@gmail.com). To ship a change, run the manual deploy below. CircleCI
-automation is wired up in `.circleci/config.yml` but **not yet active** — it needs
-the repo pushed to a Git remote (GitHub/Bitbucket) and the env vars set (see below).
+automation is wired up in `.circleci/config.yml` but **not yet active**.
+
+### Arming the CI deploy (current blockers, 2026-08-24)
+
+The pipeline builds a correct `dist/` and the Hosting config is sound — the only
+thing missing is CI credentials/setup. To make a merge to `main` publish to
+production, two things still need doing (both require the CircleCI/Firebase owner —
+they touch CI secrets):
+
+1. **Follow the project on CircleCI.** The repo now lives at
+   <https://github.com/Ripixel-Studio/insta-post-maker>, but CircleCI has not yet
+   built it (no pipelines have ever run). Set the project up / follow it in CircleCI
+   so pushes trigger the `build`→`deploy` workflow.
+2. **Set the two env vars** in CircleCI → Project Settings → Environment Variables
+   (see the table below): `FIREBASE_TOKEN` (from `firebase login:ci` as
+   ripixel@gmail.com) and `FIREBASE_PROJECT_ID` = `insta-post-maker-ripixel`.
+
+Once both are in place, the `deploy` job (gated on `main`) runs
+`firebase deploy --only hosting` automatically on every merge to `main`.
 
 ## Prerequisites
 
