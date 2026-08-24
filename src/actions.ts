@@ -32,6 +32,9 @@ import type {
   Layer,
   ImageLayer,
   TextLayer,
+  OverlayLayer,
+  ShapeLayer,
+  GradientDirection,
   ImageFilters,
   CropRect,
   CollageCell,
@@ -129,6 +132,26 @@ export interface AddTextOptions extends Box {
   letterSpacing?: number;
 }
 
+export interface GradientOverlayOptions extends Box {
+  /** Where the dark end sits: 'to-top' darkens the bottom edge (default),
+   * 'to-bottom' the top, 'to-left'/'to-right' the sides, 'radial' a vignette. */
+  direction?: GradientDirection;
+  /** Colour of the dark end, e.g. '#000000' (default) or a brand colour. */
+  color?: string;
+  /** Opacity of the dark end, 0..1 (default 0.85). */
+  strength?: number;
+  name?: string;
+}
+
+export interface ShapeOptions extends Box {
+  fill?: string;
+  opacity?: number;
+  cornerRadius?: number;
+  stroke?: string;
+  strokeWidth?: number;
+  name?: string;
+}
+
 export interface TextStyle {
   text?: string;
   fontFamily?: string;
@@ -187,6 +210,9 @@ export interface SnapshotLayer {
   fill?: string;
   assetId?: string;
   adjustments?: Partial<ImageFilters>;
+  /** Overlay: gradient direction; shape: kind. */
+  direction?: string;
+  shape?: string;
 }
 
 function snapshotLayer(l: Layer): SnapshotLayer {
@@ -211,6 +237,12 @@ function snapshotLayer(l: Layer): SnapshotLayer {
       if (f[k] !== NO_FILTERS[k]) adj[k] = f[k];
     });
     if (Object.keys(adj).length) out.adjustments = adj;
+  } else if (l.type === 'overlay') {
+    out.direction = (l as OverlayLayer).direction;
+  } else if (l.type === 'shape') {
+    const sh = l as ShapeLayer;
+    out.shape = sh.shape;
+    out.fill = sh.fill;
   }
   return out;
 }
@@ -388,6 +420,52 @@ export const editorActions = {
     return FILTER_PRESETS.map((p) => ({ id: p.id, label: p.label }));
   },
 
+  /* --------------------------- Overlays & shapes ----------------------- */
+
+  /**
+   * A gradient scrim — the standard way to make text readable over a photo.
+   * Defaults to the bottom half of the canvas fading from 85% black at the
+   * bottom edge to transparent, which is the Instagram-caption look. Returns
+   * the new layer id; add the text AFTER it so the text sits on top.
+   */
+  addGradientOverlay(opts: GradientOverlayOptions = {}): string {
+    const s = store();
+    s.addOverlayLayer();
+    const id = lastCreatedId();
+    const { color, strength, direction, name, ...box } = opts;
+    const rgba = toRgba(color ?? '#000000', Math.min(1, Math.max(0, strength ?? 0.85)));
+    const transparent = toRgba(color ?? '#000000', 0);
+    const patch: Partial<OverlayLayer> = {
+      ...compactBox(box),
+      direction: direction ?? 'to-top',
+      stops: [
+        { offset: 0, color: rgba },
+        { offset: 1, color: transparent },
+      ],
+    };
+    if (name) patch.name = name;
+    store().updateLayer(id, patch);
+    return id;
+  },
+
+  /** A solid rectangle/ellipse — e.g. a plate behind a stats block. Returns
+   * the new layer id. */
+  addShape(shape: 'rect' | 'ellipse', opts: ShapeOptions = {}): string {
+    const s = store();
+    s.addShapeLayer(shape);
+    const id = lastCreatedId();
+    const { fill, opacity, cornerRadius, stroke, strokeWidth, name, ...box } = opts;
+    const patch: Partial<ShapeLayer> = { ...compactBox(box) };
+    if (fill) patch.fill = fill;
+    if (opacity != null) patch.opacity = Math.min(1, Math.max(0, opacity));
+    if (cornerRadius != null) patch.cornerRadius = cornerRadius;
+    if (stroke != null) patch.stroke = stroke;
+    if (strokeWidth != null) patch.strokeWidth = strokeWidth;
+    if (name) patch.name = name;
+    store().updateLayer(id, patch);
+    return id;
+  },
+
   /* ------------------------------- Text ------------------------------- */
 
   /** Add a text element to the active page. Returns the new layer id. */
@@ -546,6 +624,32 @@ export const editorActions = {
 };
 
 export type EditorActions = typeof editorActions;
+
+/** Drop undefined box fields so a patch never overwrites with undefined. */
+function compactBox(box: Box): Partial<Box> {
+  const out: Partial<Box> = {};
+  (['x', 'y', 'width', 'height', 'rotation'] as (keyof Box)[]).forEach((k) => {
+    const v = box[k];
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+  });
+  return out;
+}
+
+/** '#rgb' / '#rrggbb' / 'rgb(a)' → 'rgba(r,g,b,a)'. Unknown strings fall back
+ * to black so a bad colour still produces a usable scrim. */
+export function toRgba(color: string, alpha: number): string {
+  const c = color.trim();
+  const hex = c.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3) h = h.split('').map((ch) => ch + ch).join('');
+    const n = parseInt(h, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+  }
+  const rgb = c.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgb) return `rgba(${rgb[1]},${rgb[2]},${rgb[3]},${alpha})`;
+  return `rgba(0,0,0,${alpha})`;
+}
 
 /** The legal range of each adjustment. Values outside are clamped, and a
  * caller passing e.g. brightness 50 (thinking 0..100) gets the max, not a
@@ -786,6 +890,52 @@ export const EDITOR_TOOLS: EditorTool[] = [
       required: ['id', 'preset'],
     },
     run: (a) => editorActions.applyFilterPreset(a.id as string, a.preset as string),
+  },
+  {
+    name: 'add_gradient_overlay',
+    description:
+      'Add a gradient scrim so text stays readable over a photo — THE standard fix for illegible captions/stats. Defaults: bottom half of the canvas, fading from 85% black at the bottom edge to transparent (direction "to-top"). Add it BEFORE the text so the text sits on top. Returns the new layer id.',
+    parameters: {
+      type: 'object',
+      properties: {
+        direction: {
+          type: 'string',
+          description: 'Which edge is dark: to-top = bottom edge dark (default), to-bottom = top edge dark, to-left, to-right, radial = vignette.',
+          enum: ['to-top', 'to-bottom', 'to-left', 'to-right', 'radial'],
+        },
+        color: str('Colour of the dark end, e.g. "#000000" (default) or a brand colour.'),
+        strength: num('Opacity of the dark end 0..1 (default 0.85).'),
+        x: num('Left edge in canvas px (default 0).'),
+        y: num('Top edge in canvas px (default half the canvas height).'),
+        width: num('Width in canvas px (default full width).'),
+        height: num('Height in canvas px (default half the canvas height).'),
+      },
+    },
+    run: (a) => editorActions.addGradientOverlay(a as GradientOverlayOptions),
+  },
+  {
+    name: 'add_shape',
+    description:
+      'Add a solid rectangle or ellipse (e.g. a semi-transparent plate behind a stats block, a colour bar, a divider). Returns the new layer id.',
+    parameters: {
+      type: 'object',
+      properties: {
+        shape: { type: 'string', description: 'rect | ellipse.', enum: ['rect', 'ellipse'] },
+        fill: str('Fill colour, e.g. "#000000".'),
+        opacity: num('0..1 (default 1).'),
+        cornerRadius: num('Corner radius in px (rect only).'),
+        x: num('Left edge in canvas px.'),
+        y: num('Top edge in canvas px.'),
+        width: num('Width in canvas px.'),
+        height: num('Height in canvas px.'),
+        name: str('Layer name.'),
+      },
+      required: ['shape'],
+    },
+    run: (a) => {
+      const { shape, ...opts } = a;
+      return editorActions.addShape(shape as 'rect' | 'ellipse', opts as ShapeOptions);
+    },
   },
   {
     name: 'add_text',

@@ -151,6 +151,10 @@ export function buildCopilotSystemPrompt(profile: StyleProfile | null): string {
     '  final preview_page of each page before offering export. Do not preview after every',
     '  single edit — it is slow. (A preview is also attached automatically after a run of',
     '  several edits.)',
+    '- LEGIBILITY: text or stats over a photo need a gradient scrim under them — call',
+    '  add_gradient_overlay (bottom-dark by default) BEFORE adding the text, or add_shape',
+    '  for a solid plate. Never rely on the photo happening to be dark enough. If a preview',
+    '  shows text that is hard to read, add or strengthen the overlay rather than moving on.',
     '- Placement: keep everything inside the canvas with a margin of at least 4% of the',
     '  width; never place text over a busy area or a face; align to a consistent grid.',
     '- Photos look best untouched. Do not apply filters or adjustments by default. If one',
@@ -164,6 +168,9 @@ export function buildCopilotSystemPrompt(profile: StyleProfile | null): string {
     '- Build panels as pages: add_page for each new panel; set_active_page to edit one.',
     '- Prefer ask_user over guessing when a choice materially changes the result. Ask one',
     '  crisp question at a time and wait. Do not ask about things you can just decide.',
+    '- NEVER end your turn to describe what you are about to do — do it. Keep calling',
+    '  tools until the post is complete or you genuinely need an answer (ask_user). A',
+    '  reply with no tool call ends your turn and the user has to prompt you again.',
     '- Keep the user informed in short, friendly prose between tool calls. When the post',
     '  is ready, tell them and offer export (export_png / export_carousel), or let them',
     '  export from the panel button.',
@@ -278,7 +285,15 @@ export interface CopilotDeps {
 
 export const DEFAULT_PREVIEW_EVERY = 5;
 
-const DEFAULT_MAX_STEPS = 24;
+const DEFAULT_MAX_STEPS = 40;
+/** Output budget per reply. Batching several tool calls per turn (each with a
+ * JSON input) blew through the old 2048 — the reply was cut mid-call and the
+ * loop saw "no tool use", i.e. the Copilot silently stopped. */
+const DEFAULT_MAX_TOKENS = 8192;
+/** How many times in a row we nudge a length-truncated reply to carry on. */
+const MAX_CONTINUATIONS = 2;
+export const STEP_CAP_NOTICE =
+  '⏸ Paused after {n} steps to keep costs in check — say "continue" and I\'ll carry on.';
 
 const isToolUse = (b: ContentBlock): b is ToolUseBlock => b.type === 'tool_use';
 
@@ -300,13 +315,14 @@ export async function runCopilot(
   let editsSincePreview = 0;
   const maxSteps = deps.maxSteps ?? DEFAULT_MAX_STEPS;
   const emit = (e: CopilotEvent) => deps.onEvent?.(e);
+  let continuations = 0;
 
   for (let step = 0; step < maxSteps; step++) {
     if (deps.signal?.aborted) return { status: 'done' };
 
     const reply = await send(deps.apiKey, messages, {
       model: deps.model,
-      maxTokens: deps.maxTokens ?? 2048,
+      maxTokens: deps.maxTokens ?? DEFAULT_MAX_TOKENS,
       system: deps.system,
       tools: deps.tools,
       signal: deps.signal,
@@ -318,7 +334,21 @@ export async function runCopilot(
     if (text) emit({ type: 'assistant_text', text });
 
     const toolUses = reply.content.filter(isToolUse);
-    if (toolUses.length === 0) return { status: 'done' };
+    if (toolUses.length === 0) {
+      // Cut off by the output budget before it reached a tool call: that is
+      // not the model choosing to stop. Nudge it on (bounded) instead of
+      // handing a half-sentence back to the user as if the turn were over.
+      if (reply.stopReason === 'max_tokens' && continuations < MAX_CONTINUATIONS) {
+        continuations += 1;
+        messages.push({
+          role: 'user',
+          content: 'Your reply was cut off by the length limit. Continue exactly where you stopped — call the next tool.',
+        });
+        continue;
+      }
+      return { status: 'done' };
+    }
+    continuations = 0;
 
     // Run editor tools now (the user sees the canvas change); defer ask_user.
     const ask = toolUses.find((t) => t.name === ASK_USER_TOOL_NAME);
@@ -373,6 +403,11 @@ export async function runCopilot(
     messages.push({ role: 'user', content: toolResults });
   }
 
+  // Step cap reached with work possibly unfinished. Say so — a silent stop
+  // looked like the Copilot giving up ("the chat just stops after a couple of
+  // turns"). The history is consistent (last message is tool results), so a
+  // plain "continue" from the user resumes it.
+  emit({ type: 'assistant_text', text: STEP_CAP_NOTICE.replace('{n}', String(maxSteps)) });
   return { status: 'done' };
 }
 
