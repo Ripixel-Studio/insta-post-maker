@@ -10,6 +10,7 @@ import {
   type PendingInput,
 } from '../ai/copilot';
 import { encodePhotos, usablePhotoIds } from '../ai/vision';
+import { clearSession, loadSession, saveSession } from '../ai/session';
 import { editorActions } from '../actions';
 import { PagePreview } from './PagePreview';
 
@@ -25,6 +26,13 @@ type Item =
 type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
 
 let itemCounter = 0;
+
+/** The transcript line without its render id, for storage. */
+function stripId(item: Item): DistributiveOmit<Item, 'id'> {
+  const { id, ...rest } = item;
+  void id;
+  return rest;
+}
 const nextItemId = () => (itemCounter += 1);
 
 /** A short, human summary of a tool call for the transcript chip. */
@@ -69,6 +77,44 @@ export function CopilotPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const tools = useMemo(() => buildCopilotTools(), []);
+  const restoredRef = useRef(false);
+
+  // Restore the last conversation once on mount, so a hard reload (or PWA
+  // relaunch) picks up where it left off. A turn that was mid-flight when the
+  // page died is trimmed by loadSession so the next call is valid.
+  useEffect(() => {
+    let cancelled = false;
+    void loadSession().then((s) => {
+      if (cancelled || !s) return;
+      messagesRef.current = s.messages;
+      sentPhotoIds.current = new Set(s.sentPhotoIds);
+      setItems(s.items.map((it) => ({ ...it, id: nextItemId() }) as Item));
+      setPending(s.pending);
+      restoredRef.current = true;
+    }).finally(() => {
+      restoredRef.current = true;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** Snapshot the conversation to IndexedDB. Called at turn boundaries only —
+   * never mid-loop — so what's stored is always a consistent history. */
+  function persist(nextItems: Item[], nextPending: PendingInput | null) {
+    if (!restoredRef.current) return;
+    void saveSession({
+      messages: messagesRef.current,
+      items: nextItems.map(stripId),
+      pending: nextPending,
+      sentPhotoIds: [...sentPhotoIds.current],
+    });
+  }
+  // Latest items for persist() without threading state through async code.
+  const itemsRef = useRef<Item[]>([]);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -118,9 +164,14 @@ export function CopilotPanel() {
         signal: controller.signal,
         onEvent,
       });
-      setPending(result.status === 'awaiting_input' ? result.pending : null);
+      const nextPending = result.status === 'awaiting_input' ? result.pending : null;
+      setPending(nextPending);
+      persist(itemsRef.current, nextPending);
     } catch (err) {
       setError(err instanceof AiError ? err.message : 'The Copilot hit a problem. Try again.');
+      // The history is still worth keeping (the user's message is in it); a
+      // half-finished assistant turn is trimmed on load.
+      persist(itemsRef.current, null);
     } finally {
       setBusy(false);
       abortRef.current = null;
@@ -158,6 +209,7 @@ export function CopilotPanel() {
     setPending(null);
     setError(null);
     setInput('');
+    void clearSession();
   }
 
   async function exportPanel() {
