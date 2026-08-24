@@ -5,7 +5,7 @@
  * that rides back to the model after every editing step.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { editorActions, runAction, clampFilters } from '../actions';
+import { editorActions, runAction, clampFilters, focusCrop } from '../actions';
 import { useEditor, emptyDesign } from '../store';
 import { DEFAULT_PRESET } from '../presets';
 import {
@@ -163,6 +163,63 @@ describe('the Copilot sees its work', () => {
       const blocks = res.pending.toolResults[0].content as { type: string }[];
       expect(blocks[blocks.length - 1].type).toBe('image');
     }
+  });
+});
+
+describe('subject-aware framing', () => {
+  it('focusCrop keeps the dest aspect, centres the subject and never cuts it', () => {
+    // 2000×1000 source into a 1000×1000 (square) frame; subject on the right.
+    const subject = { x: 0.7, y: 0.3, width: 0.1, height: 0.4 };
+    const c = focusCrop(2000, 1000, 1000, 1000, subject, 0.5);
+    expect(c.width / c.height).toBeCloseTo(0.5, 5);   // square in a 2:1 source = w:h 1:2 normalised
+    expect(c.x).toBeLessThanOrEqual(subject.x);
+    expect(c.x + c.width).toBeGreaterThanOrEqual(subject.x + subject.width);
+    expect(c.y).toBeLessThanOrEqual(subject.y);
+    expect(c.y + c.height).toBeGreaterThanOrEqual(subject.y + subject.height);
+    expect(c.x + c.width / 2).toBeCloseTo(0.75, 1);   // centred on the subject
+    expect(c.x + c.width).toBeLessThanOrEqual(1);
+  });
+
+  it('focusCrop tightness 1 fills the frame with the subject, 0 is the widest crop', () => {
+    const subject = { x: 0.4, y: 0.4, width: 0.2, height: 0.2 };
+    const tight = focusCrop(1000, 1000, 1000, 1000, subject, 1);
+    const wide = focusCrop(1000, 1000, 1000, 1000, subject, 0);
+    expect(tight.width).toBeCloseTo(0.22, 2);         // subject + 10% air
+    expect(wide.width).toBe(1);
+  });
+
+  it('focusCrop clamps a subject at the very edge back inside the source', () => {
+    const c = focusCrop(1000, 1000, 1000, 1000, { x: 0.95, y: 0, width: 0.05, height: 0.2 }, 0.5);
+    expect(c.x + c.width).toBeLessThanOrEqual(1);
+    expect(c.y).toBeGreaterThanOrEqual(0);
+  });
+
+  it('focus_image_on_subject applies the crop through the tool registry', () => {
+    const id = editorActions.addImage('asset_x', { x: 0, y: 0, width: 500, height: 500 });
+    const crop = runAction('focus_image_on_subject', { id, subject: { x: 0.6, y: 0.2, width: 0.2, height: 0.5 }, tightness: 0.8 }) as { x: number; width: number };
+    const layer = editorActions.getState().design.pages[0].layers[0] as { crop?: { x: number; width: number } };
+    expect(layer.crop).toEqual(crop);
+    expect(crop.x).toBeLessThanOrEqual(0.6);
+    expect(crop.x + crop.width).toBeGreaterThanOrEqual(0.8);
+  });
+
+  it('focus_cell_on_subject pans a cover-fitted cell to the subject', () => {
+    runAction('new_canvas', { preset: 'square' });
+    runAction('apply_layout', { layout: '2v' });
+    const cellId = editorActions.collageCellIds()[0];
+    expect(() => runAction('focus_cell_on_subject', { cellId, subject: { x: 0, y: 0, width: 1, height: 1 } })).toThrow(/no image yet/);
+    runAction('set_collage_cell_image', { cellId, assetId: 'asset_missing' });
+    // No registered asset → the cell rect is used as the photo size, so the
+    // cover-fit window is the full source and pan stays centred at zoom 1…
+    const flat = runAction('focus_cell_on_subject', { cellId, subject: { x: 0.8, y: 0.8, width: 0.1, height: 0.1 } }) as { offsetX: number; offsetY: number; zoom: number };
+    expect(flat).toEqual({ zoom: 1, offsetX: 0.5, offsetY: 0.5 });
+    // …while zooming in pans toward the subject (bottom-right → offsets > 0.5).
+    const zoomed = runAction('focus_cell_on_subject', { cellId, subject: { x: 0.8, y: 0.8, width: 0.1, height: 0.1 }, zoom: 2 }) as { offsetX: number; offsetY: number; zoom: number };
+    expect(zoomed.zoom).toBe(2);
+    expect(zoomed.offsetX).toBeGreaterThan(0.5);
+    expect(zoomed.offsetY).toBeGreaterThan(0.5);
+    const cell = editorActions.getState().design.pages[0].collage!.cells.find((c) => c.id === cellId)!;
+    expect(cell.zoom).toBe(2);
   });
 });
 

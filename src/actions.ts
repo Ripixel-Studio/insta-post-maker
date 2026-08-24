@@ -41,7 +41,7 @@ import type {
 } from './types';
 import { NO_FILTERS } from './types';
 import { PRESETS, DEFAULT_PRESET } from './presets';
-import { LAYOUTS } from './collage';
+import { LAYOUTS, cellRect } from './collage';
 import { FONTS, ensureFont } from './fonts';
 import { FILTER_PRESETS } from './filters';
 import { getAsset } from './assets';
@@ -93,6 +93,56 @@ function coverCrop(srcW: number, srcH: number, canvasW: number, canvasH: number)
   return srcAspect > canvasAspect
     ? { x: (1 - canvasAspect / srcAspect) / 2, y: 0, width: canvasAspect / srcAspect, height: 1 }
     : { x: 0, y: (1 - srcAspect / canvasAspect) / 2, width: 1, height: srcAspect / canvasAspect };
+}
+
+/** A region of a source image in normalised coords (0..1 of width/height). */
+export interface SubjectRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function clamp01(v: number): number {
+  return Math.min(1, Math.max(0, v));
+}
+
+function normSubject(s: SubjectRect): SubjectRect {
+  const x = clamp01(s.x), y = clamp01(s.y);
+  const width = Math.max(0.01, Math.min(1 - x, s.width));
+  const height = Math.max(0.01, Math.min(1 - y, s.height));
+  return { x, y, width, height };
+}
+
+/**
+ * The crop (normalised, dest aspect) that frames `subject`: centred on it,
+ * never cutting it, and as tight as `tightness` allows — 0 = the widest crop
+ * that keeps the aspect (subject somewhere inside), 1 = the subject fills the
+ * frame's shorter dimension. Clamped back inside the source, so a subject at
+ * the edge still gets a valid crop with itself as close to centre as possible.
+ */
+export function focusCrop(
+  srcW: number, srcH: number, dstW: number, dstH: number, subject: SubjectRect, tightness = 0.5,
+): CropRect {
+  const s = normSubject(subject);
+  const dstAspect = dstW / dstH;
+  const srcAspect = srcW / srcH;
+  // Crop size in normalised units that has the dest aspect: width w, height
+  // w * (srcAspect / dstAspect). Widest possible = the coverCrop size.
+  const wide = coverCrop(srcW, srcH, dstW, dstH);
+  const ratio = srcAspect / dstAspect;             // h = w * ratio
+  // Tightest = smallest crop that still contains the subject (with 10% air).
+  const air = 1.1;
+  const tightW = Math.max(s.width * air, (s.height * air) / ratio);
+  const t = clamp01(tightness);
+  let w = Math.min(wide.width, tightW + (wide.width - tightW) * (1 - t));
+  w = Math.max(w, Math.min(wide.width, tightW));   // never cut the subject
+  let h = w * ratio;
+  if (h > 1) { h = 1; w = h / ratio; }
+  const cx = s.x + s.width / 2, cy = s.y + s.height / 2;
+  const x = Math.min(1 - w, Math.max(0, cx - w / 2));
+  const y = Math.min(1 - h, Math.max(0, cy - h / 2));
+  return { x, y, width: w, height: h };
 }
 
 /* --------------------------------------------------------------------------
@@ -411,6 +461,50 @@ export const editorActions = {
   cropImage(id: string, crop: CropRect): void {
     requireImageLayer(id);
     store().updateLayer(id, { crop });
+  },
+
+  /**
+   * Re-frame an image layer on a subject the model has located in the
+   * source photo (normalised box). Keeps the layer's box and aspect; the
+   * subject becomes the focal point and is never cut off.
+   */
+  focusImageOnSubject(id: string, subject: SubjectRect, tightness = 0.5): CropRect {
+    const layer = requireImageLayer(id);
+    const asset = getAsset(layer.assetId);
+    const crop = focusCrop(
+      asset?.width ?? layer.width, asset?.height ?? layer.height,
+      layer.width, layer.height, subject, tightness,
+    );
+    store().updateLayer(id, { crop });
+    return crop;
+  },
+
+  /**
+   * Pan/zoom a collage cell so a subject (normalised box in the source photo)
+   * sits at the cell's centre. Cells cover-fit their photo, so this sets the
+   * zoom and the 0..1 pan offsets; the subject is kept fully visible when the
+   * zoom allows it.
+   */
+  focusCellOnSubject(cellId: string, subject: SubjectRect, zoom = 1): { zoom: number; offsetX: number; offsetY: number } {
+    const cell = requireCell(cellId);
+    if (!cell.assetId) throw new Error(`Collage cell "${cellId}" has no image yet — set_collage_cell_image first.`);
+    const s = normSubject(subject);
+    const st = store();
+    const page = activePage(st);
+    const rect = cellRect(page.collage!, cell, st.design.width, st.design.height);
+    const asset = getAsset(cell.assetId);
+    const aw = asset?.width ?? rect.width, ah = asset?.height ?? rect.height;
+    const z = Math.max(1, Math.min(4, zoom));
+    const coverScale = Math.max(rect.width / aw, rect.height / ah) * z;
+    const imgW = aw * coverScale, imgH = ah * coverScale;
+    // Visible window as a fraction of the source; pan so its centre = subject centre.
+    const winW = rect.width / imgW, winH = rect.height / imgH;
+    const cx = s.x + s.width / 2, cy = s.y + s.height / 2;
+    const offsetX = winW >= 1 ? 0.5 : clamp01((cx - winW / 2) / (1 - winW));
+    const offsetY = winH >= 1 ? 0.5 : clamp01((cy - winH / 2) / (1 - winH));
+    const patch = { zoom: z, offsetX, offsetY };
+    st.updateCell(cellId, patch);
+    return patch;
   },
 
   /** Clear any crop, showing the whole source image again. */
@@ -882,6 +976,36 @@ export const EDITOR_TOOLS: EditorTool[] = [
         width: a.width as number,
         height: a.height as number,
       }),
+  },
+  {
+    name: 'focus_image_on_subject',
+    description:
+      "Re-frame an image layer so a SUBJECT you have located in the photo becomes the focal point — centred, never cut off — keeping the layer's box and aspect. Give the subject's bounding box in normalised source coords (0..1 of the photo's width/height, origin top-left) as you see it in the photo. tightness 0..1: 0 = widest crop (subject somewhere inside), 0.5 default, 1 = subject fills the frame. Returns the crop applied.",
+    parameters: {
+      type: 'object',
+      properties: {
+        id: str('Image layer id.'),
+        subject: obj('Subject box in the source photo: { x, y, width, height } each 0..1.'),
+        tightness: num('0..1 (default 0.5). Use ~0.8 for a portrait crop of one person.'),
+      },
+      required: ['id', 'subject'],
+    },
+    run: (a) => editorActions.focusImageOnSubject(a.id as string, a.subject as SubjectRect, a.tightness as number | undefined),
+  },
+  {
+    name: 'focus_cell_on_subject',
+    description:
+      "Pan/zoom a filled collage cell so a SUBJECT you have located in its photo sits at the cell's centre. Subject box is normalised source coords (0..1). zoom ≥ 1 (default 1; ~1.5-2 for a tighter portrait). Returns the zoom/offsets applied.",
+    parameters: {
+      type: 'object',
+      properties: {
+        cellId: str('Collage cell id (see get_snapshot).'),
+        subject: obj('Subject box in the source photo: { x, y, width, height } each 0..1.'),
+        zoom: num('1..4 (default 1).'),
+      },
+      required: ['cellId', 'subject'],
+    },
+    run: (a) => editorActions.focusCellOnSubject(a.cellId as string, a.subject as SubjectRect, a.zoom as number | undefined),
   },
   {
     name: 'fit_image_to_canvas',
