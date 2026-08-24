@@ -181,14 +181,38 @@ describe('legibility helpers', () => {
     expect(editorActions.getSnapshot().pages[0].layers[0]).toMatchObject({ type: 'overlay', direction: 'to-top' });
   });
 
-  it('honours colour, strength, direction and box', () => {
-    const id = editorActions.addGradientOverlay({ color: '#123456', strength: 0.5, direction: 'to-bottom', y: 0, height: 300 });
-    const l = editorActions.getState().design.pages[0].layers.find((x) => x.id === id) as {
-      direction: string; stops: { color: string }[]; y: number; height: number;
+  it('is always anchored to the chosen edge, never floating', () => {
+    const { design } = editorActions.getState();
+    const W = design.width, H = design.height;
+    const get = (id: string) => editorActions.getState().design.pages[0].layers.find((x) => x.id === id) as {
+      direction: string; stops: { offset: number; color: string }[]; x: number; y: number; width: number; height: number; name: string;
     };
-    expect(l.direction).toBe('to-bottom');
-    expect(l.stops[0].color).toBe('rgba(18,52,86,0.5)');
-    expect([l.y, l.height]).toEqual([0, 300]);
+    const top = get(editorActions.addGradientOverlay({ edge: 'top', coverage: 0.3, color: '#123456', strength: 0.5 }));
+    expect(top.direction).toBe('to-bottom');
+    expect([top.x, top.y, top.width, top.height]).toEqual([0, 0, W, Math.round(H * 0.3)]);
+    expect(top.stops[0].color).toBe('rgba(18,52,86,0.5)');
+    expect(top.name).toBe('Top scrim');
+
+    const right = get(editorActions.addGradientOverlay({ edge: 'right', coverage: 0.25 }));
+    expect(right.direction).toBe('to-left');
+    expect([right.x, right.width, right.y, right.height]).toEqual([Math.round(W * 0.75), Math.round(W * 0.25), 0, H]);
+
+    // coverage is clamped so a scrim can never shrink to a sliver mid-frame
+    const tiny = get(editorActions.addGradientOverlay({ edge: 'bottom', coverage: 0 }));
+    expect(tiny.height).toBe(Math.round(H * 0.1));
+    expect(tiny.y + tiny.height).toBe(H);
+  });
+
+  it('vignette is clear in the centre and dark at the edges', () => {
+    const id = editorActions.addGradientOverlay({ edge: 'vignette' });
+    const l = editorActions.getState().design.pages[0].layers.find((x) => x.id === id) as {
+      direction: string; stops: { offset: number; color: string }[]; width: number; height: number;
+    };
+    const { design } = editorActions.getState();
+    expect(l.direction).toBe('radial');
+    expect([l.width, l.height]).toEqual([design.width, design.height]);
+    expect(l.stops[0].color).toBe('rgba(0,0,0,0)');
+    expect(l.stops[l.stops.length - 1].color).toBe('rgba(0,0,0,0.85)');
   });
 
   it('add_shape makes a plate with fill and opacity', () => {
