@@ -67,6 +67,12 @@ export interface StyleProfile {
   captionVoice: string;
   /** Actionable do's for producing a new post in this style. */
   recommendations: string[];
+  /** How text is used across the posts — what kinds appear (stats, labels,
+   * titles, captions, none) and where; empty when unknown. This is what lets
+   * the Copilot NOT write a caption over a photo the creator never would. */
+  textUsage: string;
+  /** Things these posts never do (e.g. "text over faces", "heavy filters"). */
+  avoid: string[];
 }
 
 export const STYLE_SYSTEM_PROMPT = [
@@ -86,8 +92,14 @@ export const STYLE_SYSTEM_PROMPT = [
   '  "motifs": string[]       — up to 6 recurring visual motifs or graphic devices',
   '  "captionVoice": string   — the voice/tone a caption should take to match',
   '  "recommendations": string[] — up to 6 short, actionable do\'s for a new on-style post',
+  '  "textUsage": string     — precisely what text appears and where (e.g. "only stat numbers',
+  '                             with small uppercase labels, bottom third; no titles or captions',
+  '                             on photos"), or "no text" if none',
+  '  "avoid": string[]        — up to 6 things these posts never do (e.g. "heavy filters",',
+  '                             "text over faces", "more than one font")',
   '',
-  'Describe only what the posts actually show. Keep every string concise.',
+  'Describe only what the posts actually show. Be literal about text: if the posts carry',
+  'no captions or titles, say so — do not assume text belongs. Keep every string concise.',
 ].join('\n');
 
 /** Build the single user message carrying the example images + instruction. */
@@ -172,6 +184,8 @@ export function parseStyleProfile(
     motifs: asStringList(r.motifs, 6),
     captionVoice: asString(r.captionVoice),
     recommendations: asStringList(r.recommendations, 6),
+    textUsage: asString(r.textUsage),
+    avoid: asStringList(r.avoid, 6),
   };
 }
 
@@ -221,6 +235,8 @@ export function styleProfileToPromptText(profile: StyleProfile): string {
   if (profile.recommendations.length) {
     lines.push(`- Do: ${profile.recommendations.join('; ')}`);
   }
+  if (profile.textUsage) lines.push(`- Text usage (binding): ${profile.textUsage}`);
+  if (profile.avoid.length) lines.push(`- Never: ${profile.avoid.join('; ')}`);
   return lines.join('\n');
 }
 
@@ -244,6 +260,8 @@ export function reviveStyleProfile(json: string): StyleProfile | null {
       motifs: asStringList(obj.motifs, 6),
       captionVoice: asString(obj.captionVoice),
       recommendations: asStringList(obj.recommendations, 6),
+      textUsage: asString(obj.textUsage),
+      avoid: asStringList(obj.avoid, 6),
     };
   } catch {
     return null;

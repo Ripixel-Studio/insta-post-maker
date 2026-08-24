@@ -162,10 +162,57 @@ export interface EditorSnapshot {
   pages: {
     id: string;
     background: string;
-    layers: { id: string; type: Layer['type']; name: string }[];
+    layers: SnapshotLayer[];
     collage?: { cols: number; rows: number; cells: { id: string; filled: boolean }[] };
   }[];
-  shared: { id: string; type: Layer['type']; name: string }[];
+  shared: SnapshotLayer[];
+}
+
+/** One layer as the Copilot sees it: id/type/name plus its box on the canvas
+ * (top-left origin, canvas px) and the few visual facts that matter for
+ * judging a layout — text content/size/colour, image asset + non-default
+ * adjustments. Without geometry the model was placing things blind. */
+export interface SnapshotLayer {
+  id: string;
+  type: Layer['type'];
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  opacity?: number;
+  text?: string;
+  fontSize?: number;
+  fill?: string;
+  assetId?: string;
+  adjustments?: Partial<ImageFilters>;
+}
+
+function snapshotLayer(l: Layer): SnapshotLayer {
+  const r = (n: number) => Math.round(n);
+  const out: SnapshotLayer = {
+    id: l.id, type: l.type, name: l.name,
+    x: r(l.x), y: r(l.y), width: r(l.width), height: r(l.height),
+  };
+  if (l.rotation) out.rotation = r(l.rotation);
+  if (l.opacity != null && l.opacity !== 1) out.opacity = Math.round(l.opacity * 100) / 100;
+  if (l.type === 'text') {
+    const t = l as TextLayer;
+    out.text = t.text.length > 60 ? `${t.text.slice(0, 57)}…` : t.text;
+    out.fontSize = r(t.fontSize);
+    out.fill = t.fill;
+  } else if (l.type === 'image') {
+    const im = l as ImageLayer;
+    out.assetId = im.assetId;
+    const f = im.filters ?? NO_FILTERS;
+    const adj: Partial<ImageFilters> = {};
+    (Object.keys(NO_FILTERS) as (keyof ImageFilters)[]).forEach((k) => {
+      if (f[k] !== NO_FILTERS[k]) adj[k] = f[k];
+    });
+    if (Object.keys(adj).length) out.adjustments = adj;
+  }
+  return out;
 }
 
 /* --------------------------------------------------------------------------
@@ -323,7 +370,7 @@ export const editorActions = {
   /** Merge colour adjustments into an image (unset fields keep their value). */
   adjustImage(id: string, filters: Partial<ImageFilters>): void {
     const layer = requireImageLayer(id);
-    store().updateLayer(id, { filters: { ...(layer.filters ?? NO_FILTERS), ...filters } });
+    store().updateLayer(id, { filters: { ...(layer.filters ?? NO_FILTERS), ...clampFilters(filters) } });
   },
 
   /** Apply a one-tap filter preset (see `listFilterPresets`) to an image. */
@@ -475,7 +522,7 @@ export const editorActions = {
   /** A compact, serialisable summary for a Copilot to reason about. */
   getSnapshot(): EditorSnapshot {
     const s = store();
-    const brief = (l: Layer) => ({ id: l.id, type: l.type, name: l.name });
+    const brief = snapshotLayer;
     return {
       canvas: { width: s.design.width, height: s.design.height },
       activePageIndex: s.activePageIndex,
@@ -499,6 +546,27 @@ export const editorActions = {
 };
 
 export type EditorActions = typeof editorActions;
+
+/** The legal range of each adjustment. Values outside are clamped, and a
+ * caller passing e.g. brightness 50 (thinking 0..100) gets the max, not a
+ * black frame. */
+export const FILTER_RANGES: Record<keyof ImageFilters, [number, number]> = {
+  brightness: [-1, 1],
+  contrast: [-100, 100],
+  saturation: [-1, 1],
+  blur: [0, 40],
+};
+
+export function clampFilters(filters: Partial<ImageFilters>): Partial<ImageFilters> {
+  const out: Partial<ImageFilters> = {};
+  (Object.keys(filters) as (keyof ImageFilters)[]).forEach((k) => {
+    const v = filters[k];
+    const range = FILTER_RANGES[k];
+    if (typeof v !== 'number' || !Number.isFinite(v) || !range) return;
+    out[k] = Math.min(range[1], Math.max(range[0], v));
+  });
+  return out;
+}
 
 /** Find a collage cell on the active page by id, or throw. */
 function requireCell(cellId: string): CollageCell {
@@ -692,7 +760,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
   {
     name: 'adjust_image',
     description:
-      'Merge colour adjustments into an image. brightness -1..1, contrast -100..100, saturation -1..1 (-1 = greyscale), blur 0..40 px.',
+      'Merge colour adjustments into an image. Ranges: brightness -1..1, contrast -100..100, saturation -1..1 (-1 = greyscale), blur 0..40 px; values are clamped. These are STRONG: keep |brightness| ≤ 0.15, |contrast| ≤ 15, |saturation| ≤ 0.2 for natural photos, and check the preview afterwards. Pass 0 to reset a channel.',
     parameters: {
       type: 'object',
       properties: {
@@ -848,7 +916,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
   {
     name: 'get_snapshot',
     description:
-      'Read a compact summary of the editor: canvas size, pages, each layer id/type/name, and collage cell ids. Call this to discover ids before acting on them.',
+      'Read the editor state: canvas size, pages, and every layer with its id/type/name AND its box (x, y, width, height in canvas px, origin top-left), text content/size/colour, image assetId and non-default adjustments, plus collage cell ids. Call this before placing or restyling anything so you know where things are.',
     parameters: { type: 'object', properties: {} },
     run: () => editorActions.getSnapshot(),
   },

@@ -67,6 +67,19 @@ export async function exportDesign(design: Design, opts: ExportOptions): Promise
 }
 
 /**
+ * A small render of the active page for the Copilot to look at — the model
+ * otherwise never sees the result of its own edits. Long edge capped at
+ * `maxEdge` px so it stays cheap to send.
+ */
+export async function exportPreview(design: Design, maxEdge = 768): Promise<Blob> {
+  return withCleanStage((stage) => {
+    const longEdge = Math.max(design.width, design.height) || 1;
+    const pixelRatio = (design.width / stage.width()) * Math.min(1, maxEdge / longEdge);
+    return toBlob(stage, { format: 'jpeg', multiplier: 1, quality: 0.8 }, pixelRatio);
+  });
+}
+
+/**
  * Slice the design into N equal vertical panels and export each as its own
  * image — a seamless Instagram carousel that pans as you swipe. Each slide is
  * (design.width / slides) px wide × design.height tall (× the @2x multiplier).

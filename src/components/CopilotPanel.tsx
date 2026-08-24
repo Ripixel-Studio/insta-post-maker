@@ -84,6 +84,8 @@ export function CopilotPanel() {
       addItem({ kind: 'tool', name: e.name, summary: toolSummary(e.name, e.input), isError: false });
     else if (e.type === 'tool_result' && e.isError)
       addItem({ kind: 'tool', name: e.name, summary: `${e.name}: ${e.content}`, isError: true });
+    else if (e.type === 'preview')
+      addItem({ kind: 'tool', name: 'preview', summary: e.reason === 'requested' ? '👁 Asked to see the page' : '👁 Checked the page after that step', isError: false });
     else if (e.type === 'question') addItem({ kind: 'question', text: e.question });
   }
 

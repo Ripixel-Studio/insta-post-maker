@@ -29,7 +29,9 @@ import {
 import { EDITOR_TOOLS, runAction, type EditorTool } from '../actions';
 import { FITGLUE_TOOLS } from '../fitglueActions';
 import { styleProfileToPromptText, type StyleProfile } from './styleProfile';
-import { downloadBlob } from '../export';
+import { downloadBlob, exportPreview } from '../export';
+import { useEditor } from '../store';
+import { encodePostImage, type StyleImage } from './styleProfile';
 import { PRESETS } from '../presets';
 import { LAYOUTS } from '../collage';
 import { FILTER_PRESETS } from '../filters';
@@ -69,14 +71,52 @@ export function editorToolToAnthropic(tool: EditorTool): AnthropicTool {
   };
 }
 
+export const PREVIEW_TOOL_NAME = 'preview_page';
+
+/** Explicit "show me" — the loop also attaches a preview automatically after
+ * any step that changed the canvas, so this is for a deliberate second look. */
+export const PREVIEW_TOOL: AnthropicTool = {
+  name: PREVIEW_TOOL_NAME,
+  description:
+    'Render the active page as an image so you can check the result of your edits (readability, overlap, off-canvas layers, photo tone). A preview is also attached automatically after every editing step.',
+  input_schema: { type: 'object', properties: {} },
+};
+
 /** Every tool the Copilot may call: the editor action layer, the FitGlue
- * tools (workout stats/charts/route from a public showcase) and `ask_user`. */
+ * tools (workout stats/charts/route from a public showcase), `preview_page`
+ * and `ask_user`. */
 export function buildCopilotTools(): AnthropicTool[] {
-  return [...EDITOR_TOOLS.map(editorToolToAnthropic), ...FITGLUE_TOOLS.map(editorToolToAnthropic), ASK_USER_TOOL];
+  return [
+    ...EDITOR_TOOLS.map(editorToolToAnthropic),
+    ...FITGLUE_TOOLS.map(editorToolToAnthropic),
+    PREVIEW_TOOL,
+    ASK_USER_TOOL,
+  ];
+}
+
+/** Tools that only read. Anything else changes what the user sees, so the
+ * step that ran it gets a rendered preview attached. */
+const READ_ONLY_TOOLS = new Set(['get_snapshot', 'fitglue_list_activities', 'fitglue_load_activity', PREVIEW_TOOL_NAME]);
+
+export function changesCanvas(toolName: string): boolean {
+  return !READ_ONLY_TOOLS.has(toolName);
+}
+
+/** Render the active page for the model. Null when the canvas isn't mounted
+ * (tests, or the panel opened before the stage) — the loop then just sends
+ * text results, as before. */
+export async function renderPreviewImage(): Promise<StyleImage | null> {
+  try {
+    const blob = await exportPreview(useEditor.getState().design);
+    return await encodePostImage(blob);
+  } catch {
+    return null;
+  }
 }
 
 /** Run a tool from either registry by name; same validation as `runAction`. */
 export function runCopilotTool(name: string, args: Record<string, unknown>): unknown {
+  if (name === PREVIEW_TOOL_NAME) return 'Preview is attached by the Copilot loop.';
   const fg = FITGLUE_TOOLS.find((t) => t.name === name);
   if (!fg) return runAction(name, args);
   const missing = (fg.parameters.required ?? []).filter((k) => args[k] === undefined || args[k] === null);
@@ -100,8 +140,24 @@ export function buildCopilotSystemPrompt(profile: StyleProfile | null): string {
     'HARD RULES:',
     '- You CANNOT generate, paint, or invent imagery. Work only with the photos the user',
     "  uploaded; they are shown to you as images tagged with an assetId. Use those ids.",
-    '- Call get_snapshot before acting on existing layers/pages/cells to learn their ids.',
-    '  Ids you invent will be rejected.',
+    '- Call get_snapshot before acting on existing layers/pages/cells to learn their ids',
+    '  AND their positions. It returns every layer\'s box (x, y, width, height in canvas px,',
+    '  origin top-left). Ids you invent will be rejected.',
+    '- LOOK AT YOUR WORK. After each editing step you receive a rendered preview of the',
+    '  active page. Study it before the next step: is every text readable and inside the',
+    '  canvas, nothing overlapping or covering faces, do photos look natural (not dark, not',
+    '  washed out, skin tones true)? If anything is wrong, fix it FIRST. You can also call',
+    '  preview_page at any time.',
+    '- Placement: keep everything inside the canvas with a margin of at least 4% of the',
+    '  width; never place text over a busy area or a face; align to a consistent grid.',
+    '- Photos look best untouched. Do not apply filters or adjustments by default. If one',
+    '  is genuinely needed, keep it subtle (|brightness| ≤ 0.15, |contrast| ≤ 15,',
+    '  |saturation| ≤ 0.2), check the preview, and revert (preset "none" / values 0) if the',
+    '  photo went dark, tinted or oversaturated.',
+    '- The user\'s STYLE PROFILE (below, when present) is binding, not a suggestion. Its',
+    '  "Text usage" line says exactly what text belongs: if it says stats and labels only,',
+    '  add NO titles, captions, quotes or hashtags — not even one. Its "Never" list is',
+    '  absolute.',
     '- Build panels as pages: add_page for each new panel; set_active_page to edit one.',
     '- Prefer ask_user over guessing when a choice materially changes the result. Ask one',
     '  crisp question at a time and wait. Do not ask about things you can just decide.',
@@ -172,6 +228,7 @@ export type CopilotEvent =
   | { type: 'assistant_text'; text: string }
   | { type: 'tool_call'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; id: string; name: string; content: string; isError: boolean }
+  | { type: 'preview'; reason: 'auto' | 'requested' }
   | { type: 'question'; id: string; question: string };
 
 /** State captured when the loop pauses on `ask_user`. The panel turns the
@@ -206,6 +263,9 @@ export interface CopilotDeps {
   }) => Promise<MessageResponse>;
   /** Injectable for tests; defaults to {@link executeEditorTool}. */
   execute?: (name: string, input: Record<string, unknown>) => Promise<ToolExecResult>;
+  /** Injectable for tests; defaults to {@link renderPreviewImage}. Returning
+   * null skips the preview for that step. */
+  preview?: () => Promise<StyleImage | null>;
 }
 
 const DEFAULT_MAX_STEPS = 24;
@@ -225,6 +285,7 @@ export async function runCopilot(
 ): Promise<CopilotResult> {
   const send = deps.send ?? ((k, m, o) => createMessage(k, m, o));
   const execute = deps.execute ?? executeEditorTool;
+  const preview = deps.preview ?? renderPreviewImage;
   const maxSteps = deps.maxSteps ?? DEFAULT_MAX_STEPS;
   const emit = (e: CopilotEvent) => deps.onEvent?.(e);
 
@@ -252,7 +313,13 @@ export async function runCopilot(
     const editorUses = toolUses.filter((t) => t.name !== ASK_USER_TOOL_NAME);
 
     const toolResults: ToolResultBlock[] = [];
+    let previewNeeded: 'auto' | 'requested' | null = null;
     for (const use of editorUses) {
+      if (use.name === PREVIEW_TOOL_NAME) {
+        previewNeeded = 'requested';
+        toolResults.push({ type: 'tool_result', tool_use_id: use.id, content: 'Preview attached below.' });
+        continue;
+      }
       emit({ type: 'tool_call', id: use.id, name: use.name, input: use.input });
       const res = await execute(use.name, use.input);
       emit({ type: 'tool_result', id: use.id, name: use.name, content: res.content, isError: res.isError });
@@ -262,6 +329,23 @@ export async function runCopilot(
         content: res.content,
         ...(res.isError ? { is_error: true } : {}),
       });
+      if (!res.isError && changesCanvas(use.name) && !previewNeeded) previewNeeded = 'auto';
+    }
+
+    // The model must see what it just did. One preview per step, attached to
+    // the last tool_result (tool_result content may carry image blocks).
+    if (previewNeeded && toolResults.length) {
+      const img = await preview();
+      if (img) {
+        emit({ type: 'preview', reason: previewNeeded });
+        const last = toolResults[toolResults.length - 1];
+        const prior = typeof last.content === 'string' ? [{ type: 'text' as const, text: last.content }] : last.content;
+        last.content = [
+          ...prior,
+          { type: 'text', text: 'Rendered preview of the active page after this step. Check it before continuing:' },
+          { type: 'image', source: { type: 'base64', media_type: img.media_type, data: img.data } },
+        ];
+      }
     }
 
     if (ask) {
