@@ -32,6 +32,8 @@ const PROFILE: StyleProfile = {
   motifs: ['grain'],
   captionVoice: 'Punchy, second-person',
   recommendations: ['Big type'],
+  textUsage: '',
+  avoid: [],
 };
 
 /** Build a fake `send` that returns a scripted sequence of model replies. */
@@ -63,7 +65,7 @@ describe('tool conversion', () => {
 
   it('exposes every editor tool plus ask_user', () => {
     const tools = buildCopilotTools();
-    expect(tools).toHaveLength(EDITOR_TOOLS.length + FITGLUE_TOOLS.length + 1);
+    expect(tools).toHaveLength(EDITOR_TOOLS.length + FITGLUE_TOOLS.length + 2); // + preview_page + ask_user
     expect(tools.some((t) => t.name === ASK_USER_TOOL_NAME)).toBe(true);
     for (const t of EDITOR_TOOLS) expect(tools.some((x) => x.name === t.name)).toBe(true);
   });
