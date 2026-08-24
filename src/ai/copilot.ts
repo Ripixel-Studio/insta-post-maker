@@ -27,6 +27,7 @@ import {
   type ToolUseBlock,
 } from './client';
 import { EDITOR_TOOLS, runAction, type EditorTool } from '../actions';
+import { FITGLUE_TOOLS } from '../fitglueActions';
 import { styleProfileToPromptText, type StyleProfile } from './styleProfile';
 import { downloadBlob } from '../export';
 import { PRESETS } from '../presets';
@@ -68,9 +69,19 @@ export function editorToolToAnthropic(tool: EditorTool): AnthropicTool {
   };
 }
 
-/** Every tool the Copilot may call: the editor action layer + `ask_user`. */
+/** Every tool the Copilot may call: the editor action layer, the FitGlue
+ * tools (workout stats/charts/route from a public showcase) and `ask_user`. */
 export function buildCopilotTools(): AnthropicTool[] {
-  return [...EDITOR_TOOLS.map(editorToolToAnthropic), ASK_USER_TOOL];
+  return [...EDITOR_TOOLS.map(editorToolToAnthropic), ...FITGLUE_TOOLS.map(editorToolToAnthropic), ASK_USER_TOOL];
+}
+
+/** Run a tool from either registry by name; same validation as `runAction`. */
+export function runCopilotTool(name: string, args: Record<string, unknown>): unknown {
+  const fg = FITGLUE_TOOLS.find((t) => t.name === name);
+  if (!fg) return runAction(name, args);
+  const missing = (fg.parameters.required ?? []).filter((k) => args[k] === undefined || args[k] === null);
+  if (missing.length) throw new Error(`Tool "${name}" is missing required argument(s): ${missing.join(', ')}.`);
+  return fg.run(args);
 }
 
 /** Build the system prompt, folding in the user's style profile (when present)
@@ -97,6 +108,14 @@ export function buildCopilotSystemPrompt(profile: StyleProfile | null): string {
     '- Keep the user informed in short, friendly prose between tool calls. When the post',
     '  is ready, tell them and offer export (export_png / export_carousel), or let them',
     '  export from the panel button.',
+    '',
+    'FITGLUE (workout posts): if the user mentions a run/ride/workout, a fitglue.tech link or',
+    'an @handle, use the fitglue_* tools. fitglue_list_activities(handle) finds recent',
+    'activities; fitglue_load_activity(url or id) returns the title, stats (with ids), charts,',
+    'route and photos. Then place them: fitglue_add_stats_block for a tidy row of headline',
+    'numbers, fitglue_add_stat for one big number, fitglue_add_chart / fitglue_add_route for',
+    'transparent overlays (place them with place_image), and add_text with the returned title.',
+    'These numbers are real data — never round, invent or "improve" them.',
     '',
     'Available presets: ' + PRESETS.map((p) => `${p.id} (${p.width}×${p.height})`).join(', ') + '.',
     'Collage layouts: ' + LAYOUTS.map((l) => l.id).join(', ') + '.',
@@ -128,7 +147,7 @@ export async function executeEditorTool(
   input: Record<string, unknown>,
 ): Promise<ToolExecResult> {
   try {
-    const out = await Promise.resolve(runAction(name, input));
+    const out = await Promise.resolve(runCopilotTool(name, input));
     if (out instanceof Blob) {
       downloadBlob(out, 'insta-post.png');
       return { content: 'Exported the post and downloaded it.', isError: false };
