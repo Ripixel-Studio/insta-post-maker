@@ -14,6 +14,9 @@ Working today:
 
 - Canvas presets (Story / Square / Portrait / Landscape) **+ custom size**
 - Add **images** (drag-drop, file picker, **clipboard paste**), **text**
+- **Bulk photo import**: multi-select the picker or drop a whole batch of files —
+  they stage in a collapsible **image tray** (rather than piling up as stacked
+  layers), and you click a thumbnail to drop it onto the current page
   (Google-CDN fonts), **gradient overlays**, and **shapes** (rect/ellipse/line)
 - Free transform (move / scale / rotate / **flip**) about the centre
 - **Image crop** editor (trim-style with aspect presets) and **adjustments**
@@ -66,6 +69,9 @@ npm run lint     # eslint
 
 - `src/types.ts` — the serializable **document model** (single source of truth)
 - `src/store.ts` — zustand store + undo/redo history + ephemeral UI state
+- `src/actions.ts` — the **editor action layer**: a typed programmatic API over
+  the store/exporter (`editorActions`), plus a name-addressable tool registry
+  (`EDITOR_TOOLS` / `runAction`) so an AI Copilot can drive the real editor
 - `src/canvas/` — the Konva engine: `CanvasStage`, layer `nodes`, `CropOverlay`,
   `CollageView`, snapping `guides`
 - `src/export.ts` — full-resolution rasterisation + Web Share, independent of

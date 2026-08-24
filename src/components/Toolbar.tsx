@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useEditor } from '../store';
 import { PRESETS } from '../presets';
-import { addImageAsset } from '../assets';
+import { importFilesSmart } from '../bulkImport';
 import {
   exportDesign,
   exportCarousel,
@@ -34,7 +34,6 @@ function btn(active = false) {
 export function Toolbar() {
   const design = useEditor((s) => s.design);
   const magicResize = useEditor((s) => s.magicResize);
-  const addImageLayer = useEditor((s) => s.addImageLayer);
   const addTextLayer = useEditor((s) => s.addTextLayer);
   const addOverlayLayer = useEditor((s) => s.addOverlayLayer);
   const addShapeLayer = useEditor((s) => s.addShapeLayer);
@@ -57,17 +56,10 @@ export function Toolbar() {
     (p) => p.width === design.width && p.height === design.height,
   );
 
-  async function handleFiles(files: FileList | null) {
-    if (!files) return;
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) continue;
-      try {
-        const asset = await addImageAsset(file);
-        addImageLayer(asset.id);
-      } catch (err) {
-        console.error('Failed to load image', err);
-      }
-    }
+  // One photo drops straight onto the canvas; a multi-select batch is staged in
+  // the image tray (see importFilesSmart).
+  function handleFiles(files: FileList | null) {
+    void importFilesSmart(files);
   }
 
   async function build() {
