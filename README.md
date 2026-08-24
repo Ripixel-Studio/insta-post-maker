@@ -14,6 +14,9 @@ Working today:
 
 - Canvas presets (Story / Square / Portrait / Landscape) **+ custom size**
 - Add **images** (drag-drop, file picker, **clipboard paste**), **text**
+- **Bulk photo import**: multi-select the picker or drop a whole batch of files —
+  they stage in a collapsible **image tray** (rather than piling up as stacked
+  layers), and you click a thumbnail to drop it onto the current page
   (Google-CDN fonts), **gradient overlays**, and **shapes** (rect/ellipse/line)
 - Free transform (move / scale / rotate / **flip**) about the centre
 - **Image crop** editor (trim-style with aspect presets) and **adjustments**

@@ -17,6 +17,7 @@ import type {
 import { NO_FILTERS } from './types';
 import { DEFAULT_PRESET } from './presets';
 import { nextId, getAsset } from './assets';
+import type { ImportProgress } from './bulkImport';
 
 export function emptyPage(): Page {
   return { id: nextId('page'), background: '#1b1d22', layers: [], collage: undefined };
@@ -200,6 +201,18 @@ interface EditorState {
   updateCell: (id: string, patch: Partial<CollageCell>) => void;
   setSplit: (axis: 'x' | 'y', index: number, value: number) => void;
 
+  // Image tray — a staging shelf of bulk-imported photos not yet placed. Kept
+  // in ephemeral UI state (assets already persist in IndexedDB), so it is not
+  // part of the undoable design document.
+  tray: string[];
+  trayOpen: boolean;
+  importProgress: ImportProgress | null;
+  addToTray: (assetId: string) => void;
+  removeFromTray: (assetId: string) => void;
+  clearTray: () => void;
+  setTrayOpen: (open: boolean) => void;
+  setImportProgress: (p: ImportProgress | null) => void;
+
   addImageLayer: (assetId: string) => string;
   addTextLayer: () => void;
   addTextElement: (text: string, opts?: Partial<TextLayer>) => void;
@@ -251,6 +264,15 @@ export const useEditor = create<EditorState>((set, get) => {
     eraseTargetId: null,
     editingTextId: null,
     selectedCellId: null,
+    tray: [],
+    trayOpen: false,
+    importProgress: null,
+    addToTray: (assetId) =>
+      set((s) => (s.tray.includes(assetId) ? { trayOpen: true } : { tray: [...s.tray, assetId], trayOpen: true })),
+    removeFromTray: (assetId) => set((s) => ({ tray: s.tray.filter((id) => id !== assetId) })),
+    clearTray: () => set({ tray: [] }),
+    setTrayOpen: (open) => set({ trayOpen: open }),
+    setImportProgress: (p) => set({ importProgress: p }),
     sheetOpen: false,
     setSheetOpen: (open) => set({ sheetOpen: open }),
     viewAll: false,
