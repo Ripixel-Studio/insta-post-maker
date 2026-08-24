@@ -521,6 +521,8 @@ export interface ParamSchema {
       type: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array';
       description?: string;
       enum?: (string | number)[];
+      /** Element schema for `array` properties. */
+      items?: { type: 'string' | 'number' | 'integer' | 'boolean' };
     }
   >;
   required?: string[];
