@@ -27,9 +27,11 @@ import { nowMs } from '../persistence';
  * match are dropped rather than mis-read. */
 export const STYLE_PROFILE_VERSION = 1;
 
-/** Guard rails on how much we send in one vision pass — enough to spot a
- * consistent style, cheap enough to keep the request small and fast. */
-export const MAX_SAMPLE_POSTS = 8;
+/** Guard rails on how much we send in one vision pass. A "post" is often a
+ * carousel of several panels, so a handful of posts is easily 20-40 images;
+ * each is downscaled to ~1024px (~1.4k tokens), so 40 stays comfortably
+ * inside the context window and under the API's per-request image limit. */
+export const MAX_SAMPLE_POSTS = 40;
 export const MIN_SAMPLE_POSTS = 1;
 
 /** A base64-encoded image ready to hand to the Messages API. */
@@ -69,8 +71,10 @@ export interface StyleProfile {
 
 export const STYLE_SYSTEM_PROMPT = [
   'You are a brand-design analyst. You are shown a set of finished Instagram posts',
-  'from a single creator or brand. Study them together and distil the *reusable*',
-  'style they share so future posts can be made to match.',
+  'from a single creator or brand. Several images may be panels of one carousel',
+  'post — treat consecutive images that clearly belong together as one post and',
+  'note how panels relate (cover, body, closer). Study them together and distil',
+  'the *reusable* style they share so future posts can be made to match.',
   '',
   'Respond with ONLY a single JSON object (no prose, no markdown fences) with',
   'exactly these keys:',
@@ -95,7 +99,7 @@ export function buildStyleMessages(images: StyleImage[]): ClaudeMessage[] {
   const intro =
     images.length === 1
       ? 'Here is 1 finished example post. Distil its style profile.'
-      : `Here are ${images.length} finished example posts. Distil the style profile they share.`;
+      : `Here are ${images.length} images from finished example posts (some may be panels of one carousel, in order). Distil the style profile they share.`;
   return [
     {
       role: 'user',
@@ -195,7 +199,6 @@ export async function distillStyleProfile(
     model: opts.model ?? DEFAULT_MODEL,
     system: STYLE_SYSTEM_PROMPT,
     maxTokens: 1500,
-    temperature: 0.3,
     signal: opts.signal,
   });
   return parseStyleProfile(raw, { sampleCount: sample.length, createdAt: opts.now ?? nowMs() });
