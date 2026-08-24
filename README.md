@@ -76,11 +76,17 @@ npm run lint     # eslint
   `CollageView`, snapping `guides`
 - `src/export.ts` — full-resolution rasterisation + Web Share, independent of
   the on-screen display scale
-- `src/ai/` — bring-your-own-key Claude client (`client.ts`), on-device key
-  storage + gating (`storage.ts`, `AiGate`), and **style profile**
+- `src/ai/` — bring-your-own-key Claude client (`client.ts`, now with a
+  tool-use `createMessage` alongside the text-only `complete`), on-device key
+  storage + gating (`storage.ts`, `AiGate`), the **style profile**
   (`styleProfile.ts`): distil a reusable, on-device style profile from a few of
   your finished example posts via a Claude-vision pass, injectable into future
-  prompts through `styleProfileToPromptText`
+  prompts through `styleProfileToPromptText`; and the **AI Post Copilot**
+  (`copilot.ts` + `vision.ts`): a browser-side Claude tool-use loop that drives
+  the editor action layer to build a multi-panel post from your uploaded photos
+  (vision on the photos + your style profile), with an `ask_user` human-in-the-loop
+  tool. UI lives in `components/CopilotPanel.tsx` — a conversation/preview panel
+  that offers export. No image generation.
 - `src/persistence.ts` / `src/usePersistence.ts` — Dexie/IndexedDB projects + assets
 - `src/collage.ts` — collage templates and cell geometry
 - `src/filters.ts` — adjustment presets; `src/fonts.ts` — Google-CDN font set

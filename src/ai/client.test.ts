@@ -3,9 +3,12 @@ import {
   AiError,
   buildRequest,
   complete,
+  createMessage,
+  replyText,
   looksLikeApiKey,
   validateKey,
   DEFAULT_MODEL,
+  type AnthropicTool,
 } from './client';
 
 function jsonResponse(body: unknown, init: { status?: number } = {}): Response {
@@ -47,6 +50,19 @@ describe('buildRequest', () => {
     // Optional fields omitted when not provided.
     expect(body.system).toBeUndefined();
     expect(body.temperature).toBeUndefined();
+  });
+
+  it('includes tools and tool_choice only when provided', () => {
+    const tools: AnthropicTool[] = [
+      { name: 'add_text', description: 'add text', input_schema: { type: 'object', properties: {} } },
+    ];
+    const { init } = buildRequest('sk-ant-x', [{ role: 'user', content: 'hi' }], {
+      tools,
+      toolChoice: { type: 'auto' },
+    });
+    const body = JSON.parse(init.body as string);
+    expect(body.tools).toEqual(tools);
+    expect(body.tool_choice).toEqual({ type: 'auto' });
   });
 
   it('passes through model / system / temperature / maxTokens overrides', () => {
@@ -104,6 +120,38 @@ describe('complete', () => {
     vi.stubGlobal('fetch', fetchSpy);
     await expect(complete('   ', [{ role: 'user', content: 'hi' }])).rejects.toBeInstanceOf(AiError);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('createMessage', () => {
+  it('returns the raw content blocks and stop reason of a tool-use reply', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          content: [
+            { type: 'text', text: 'Adding a title.' },
+            { type: 'tool_use', id: 'tu_1', name: 'add_text', input: { text: 'Hi' } },
+          ],
+          stop_reason: 'tool_use',
+        }),
+      ),
+    );
+    const res = await createMessage('sk-ant-x', [{ role: 'user', content: 'go' }]);
+    expect(res.stopReason).toBe('tool_use');
+    expect(res.content).toHaveLength(2);
+    expect(res.content[1]).toMatchObject({ type: 'tool_use', name: 'add_text' });
+    expect(replyText(res.content)).toBe('Adding a title.');
+  });
+
+  it('maps an API error to AiError just like complete', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ error: { type: 'authentication_error' } }, { status: 401 })),
+    );
+    const err = await createMessage('sk-ant-bad', [{ role: 'user', content: 'hi' }]).catch((e) => e);
+    expect(err).toBeInstanceOf(AiError);
+    expect(err.status).toBe(401);
   });
 });
 

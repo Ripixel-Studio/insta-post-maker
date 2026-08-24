@@ -20,6 +20,7 @@ import { AddMenu } from './AddMenu';
 import { HelpOverlay } from './HelpOverlay';
 import { AiSettings } from './AiSettings';
 import { StyleProfilePanel } from './StyleProfilePanel';
+import { CopilotPanel } from './CopilotPanel';
 import { AiGate } from '../ai/AiGate';
 import { LAYOUTS } from '../collage';
 import { promptAddQrCode } from '../qr';
@@ -235,6 +236,9 @@ export function Toolbar() {
       {/* Export controls pushed to the right */}
       <div className="ml-auto flex items-center gap-2">
         <AiGate>
+          <span className="hidden md:inline-flex">
+            <CopilotPanel />
+          </span>
           <span className="hidden md:inline-flex">
             <StyleProfilePanel />
           </span>
