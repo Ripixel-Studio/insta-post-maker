@@ -9,6 +9,7 @@ import { TemplatesMenu } from './TemplatesMenu';
 import { FitGlueImport } from './FitGlueImport';
 import { AnimateMenu } from './AnimateMenu';
 import { HelpOverlay } from './HelpOverlay';
+import { AiSettings } from './AiSettings';
 import { EmojiPicker } from './EmojiPicker';
 import { PageBar } from './PageBar';
 import { PRESETS } from '../presets';
@@ -193,6 +194,7 @@ export function MobileShell() {
           <TemplatesMenu />
           <FitGlueImport />
           {canRecordVideo() && <AnimateMenu />}
+          <AiSettings />
           <HelpOverlay />
         </div>
         <p className="mt-2 text-[10px] uppercase tracking-wide text-zinc-500">Resize (reflow)</p>

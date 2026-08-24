@@ -178,6 +178,11 @@ interface EditorState {
   addBrandColor: (color: string) => void;
   removeBrandColor: (color: string) => void;
 
+  /** The user's Claude API key ('' when none). AI surfaces gate on this being
+   * non-empty; the value is persisted on-device via `src/ai/storage.ts`. */
+  aiKey: string;
+  setAiKey: (key: string) => void;
+
   setPreset: (preset: CanvasPreset) => void;
   setCanvasSize: (width: number, height: number) => void;
   magicResize: (width: number, height: number) => void;
@@ -309,6 +314,8 @@ export const useEditor = create<EditorState>((set, get) => {
     addBrandColor: (color) =>
       set((s) => ({ brandColors: s.brandColors.includes(color) ? s.brandColors : [...s.brandColors, color] })),
     removeBrandColor: (color) => set((s) => ({ brandColors: s.brandColors.filter((c) => c !== color) })),
+    aiKey: '',
+    setAiKey: (key) => set({ aiKey: key.trim() }),
     addCustomFont: (family) =>
       set((s) => ({ customFonts: s.customFonts.includes(family) ? s.customFonts : [...s.customFonts, family] })),
     pushRecentColor: (color) =>

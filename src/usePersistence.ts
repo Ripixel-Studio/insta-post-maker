@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useEditor } from './store';
 import { hydrateAssets, nextId } from './assets';
 import { hydrateFonts } from './fonts';
+import { loadStoredKey } from './ai/storage';
 import {
   getMeta,
   setMeta,
@@ -28,9 +29,11 @@ export function usePersistence() {
       await hydrateAssets();
       const fontFamilies = await hydrateFonts();
       const brandJson = await getMeta('brandColors');
+      const storedKey = await loadStoredKey();
       if (!cancelled) {
-        const { addCustomFont, setBrandColors } = useEditor.getState();
+        const { addCustomFont, setBrandColors, setAiKey } = useEditor.getState();
         fontFamilies.forEach(addCustomFont);
+        setAiKey(storedKey);
         if (brandJson) {
           try {
             setBrandColors(JSON.parse(brandJson));
