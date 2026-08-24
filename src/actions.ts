@@ -132,15 +132,44 @@ export interface AddTextOptions extends Box {
   letterSpacing?: number;
 }
 
-export interface GradientOverlayOptions extends Box {
-  /** Where the dark end sits: 'to-top' darkens the bottom edge (default),
-   * 'to-bottom' the top, 'to-left'/'to-right' the sides, 'radial' a vignette. */
-  direction?: GradientDirection;
+export type ScrimEdge = 'bottom' | 'top' | 'left' | 'right' | 'vignette';
+
+/** A scrim is always anchored to a canvas edge — dark AT the edge, fading
+ * toward the middle — which is how gradients are used for legibility. The
+ * box is derived from the canvas, never hand-placed, so it cannot float in
+ * the middle of the frame. */
+export interface GradientOverlayOptions {
+  /** Which edge is dark (default 'bottom'); 'vignette' darkens all edges. */
+  edge?: ScrimEdge;
+  /** How far the fade reaches from that edge, as a fraction of the canvas
+   * (0.1..1, default 0.5 = half the canvas). Ignored for 'vignette'. */
+  coverage?: number;
   /** Colour of the dark end, e.g. '#000000' (default) or a brand colour. */
   color?: string;
-  /** Opacity of the dark end, 0..1 (default 0.85). */
+  /** Opacity at the edge, 0..1 (default 0.85). */
   strength?: number;
   name?: string;
+}
+
+const EDGE_DIRECTION: Record<ScrimEdge, GradientDirection> = {
+  bottom: 'to-top',
+  top: 'to-bottom',
+  left: 'to-right',
+  right: 'to-left',
+  vignette: 'radial',
+};
+
+/** The box a scrim occupies for an edge + coverage on a W×H canvas. */
+export function scrimBox(edge: ScrimEdge, coverage: number, W: number, H: number): Box {
+  const c = Math.min(1, Math.max(0.1, coverage));
+  switch (edge) {
+    case 'bottom': return { x: 0, y: Math.round(H * (1 - c)), width: W, height: Math.round(H * c) };
+    case 'top': return { x: 0, y: 0, width: W, height: Math.round(H * c) };
+    case 'left': return { x: 0, y: 0, width: Math.round(W * c), height: H };
+    case 'right': return { x: Math.round(W * (1 - c)), y: 0, width: Math.round(W * c), height: H };
+    case 'vignette':
+    default: return { x: 0, y: 0, width: W, height: H };
+  }
 }
 
 export interface ShapeOptions extends Box {
@@ -430,20 +459,23 @@ export const editorActions = {
    */
   addGradientOverlay(opts: GradientOverlayOptions = {}): string {
     const s = store();
+    const edge: ScrimEdge = opts.edge ?? 'bottom';
     s.addOverlayLayer();
     const id = lastCreatedId();
-    const { color, strength, direction, name, ...box } = opts;
-    const rgba = toRgba(color ?? '#000000', Math.min(1, Math.max(0, strength ?? 0.85)));
-    const transparent = toRgba(color ?? '#000000', 0);
+    const dark = toRgba(opts.color ?? '#000000', Math.min(1, Math.max(0, opts.strength ?? 0.85)));
+    const clear = toRgba(opts.color ?? '#000000', 0);
+    // Linear: offset 0 is the named edge (see canvas gradientPoints), so it
+    // is the dark end. Radial: offset 0 is the CENTRE, so the vignette must
+    // be clear there and dark at offset 1 (the edges).
+    const stops = edge === 'vignette'
+      ? [{ offset: 0.45, color: clear }, { offset: 1, color: dark }]
+      : [{ offset: 0, color: dark }, { offset: 1, color: clear }];
     const patch: Partial<OverlayLayer> = {
-      ...compactBox(box),
-      direction: direction ?? 'to-top',
-      stops: [
-        { offset: 0, color: rgba },
-        { offset: 1, color: transparent },
-      ],
+      ...scrimBox(edge, opts.coverage ?? 0.5, s.design.width, s.design.height),
+      direction: EDGE_DIRECTION[edge],
+      stops,
+      name: opts.name ?? (edge === 'vignette' ? 'Vignette' : `${edge[0].toUpperCase()}${edge.slice(1)} scrim`),
     };
-    if (name) patch.name = name;
     store().updateLayer(id, patch);
     return id;
   },
@@ -894,21 +926,18 @@ export const EDITOR_TOOLS: EditorTool[] = [
   {
     name: 'add_gradient_overlay',
     description:
-      'Add a gradient scrim so text stays readable over a photo — THE standard fix for illegible captions/stats. Defaults: bottom half of the canvas, fading from 85% black at the bottom edge to transparent (direction "to-top"). Add it BEFORE the text so the text sits on top. Returns the new layer id.',
+      'Add an edge-anchored gradient scrim so text stays readable over a photo — THE standard fix for illegible captions/stats. It is always dark AT a canvas edge and fades toward the middle (you cannot place it freely). Default: bottom edge, 85% black, fading over the lower half. Put stats/text inside the dark region, and add the scrim BEFORE the text so the text sits on top. Returns the new layer id.',
     parameters: {
       type: 'object',
       properties: {
-        direction: {
+        edge: {
           type: 'string',
-          description: 'Which edge is dark: to-top = bottom edge dark (default), to-bottom = top edge dark, to-left, to-right, radial = vignette.',
-          enum: ['to-top', 'to-bottom', 'to-left', 'to-right', 'radial'],
+          description: 'Which canvas edge is dark: bottom (default, for captions/stats at the bottom), top, left, right, or vignette (all edges, for centred text).',
+          enum: ['bottom', 'top', 'left', 'right', 'vignette'],
         },
-        color: str('Colour of the dark end, e.g. "#000000" (default) or a brand colour.'),
-        strength: num('Opacity of the dark end 0..1 (default 0.85).'),
-        x: num('Left edge in canvas px (default 0).'),
-        y: num('Top edge in canvas px (default half the canvas height).'),
-        width: num('Width in canvas px (default full width).'),
-        height: num('Height in canvas px (default half the canvas height).'),
+        coverage: num('How far the fade reaches from that edge as a fraction of the canvas, 0.1..1 (default 0.5). Use ~0.35 for one line of text, ~0.5 for a stats block.'),
+        color: str('Colour at the edge, e.g. "#000000" (default) or a brand colour.'),
+        strength: num('Opacity at the edge 0..1 (default 0.85).'),
       },
     },
     run: (a) => editorActions.addGradientOverlay(a as GradientOverlayOptions),
