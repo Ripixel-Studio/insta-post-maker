@@ -10,7 +10,7 @@ import {
   type CopilotEvent,
 } from './copilot';
 import { EDITOR_TOOLS } from '../actions';
-import { FITGLUE_TOOLS } from '../fitglueActions';
+import { ACTIVITY_TOOLS } from '../activityActions';
 import { useEditor, emptyDesign } from '../store';
 import { DEFAULT_PRESET } from '../presets';
 import type { ClaudeMessage, MessageResponse, ToolUseBlock } from './client';
@@ -65,7 +65,7 @@ describe('tool conversion', () => {
 
   it('exposes every editor tool plus ask_user', () => {
     const tools = buildCopilotTools();
-    expect(tools).toHaveLength(EDITOR_TOOLS.length + FITGLUE_TOOLS.length + 2); // + preview_page + ask_user
+    expect(tools).toHaveLength(EDITOR_TOOLS.length + ACTIVITY_TOOLS.length + 2); // + preview_page + ask_user
     expect(tools.some((t) => t.name === ASK_USER_TOOL_NAME)).toBe(true);
     for (const t of EDITOR_TOOLS) expect(tools.some((x) => x.name === t.name)).toBe(true);
   });

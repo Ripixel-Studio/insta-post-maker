@@ -71,9 +71,9 @@ describe('the Copilot sees its work', () => {
   it('registers preview_page and knows which tools change the canvas', () => {
     expect(buildCopilotTools().map((t) => t.name)).toContain(PREVIEW_TOOL_NAME);
     expect(changesCanvas('add_text')).toBe(true);
-    expect(changesCanvas('fitglue_add_route')).toBe(true);
+    expect(changesCanvas('activity_add_overlay')).toBe(true);
     expect(changesCanvas('get_snapshot')).toBe(false);
-    expect(changesCanvas('fitglue_load_activity')).toBe(false);
+    expect(changesCanvas('activity_load')).toBe(false);
   });
 
   it('attaches one rendered preview once enough edits have accumulated', async () => {

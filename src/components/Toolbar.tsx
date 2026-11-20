@@ -14,7 +14,7 @@ import { canRecordVideo } from '../motion';
 import { AnimateMenu } from './AnimateMenu';
 import { ProjectsMenu } from './ProjectsMenu';
 import { TemplatesMenu } from './TemplatesMenu';
-import { FitGlueImport } from './FitGlueImport';
+import { ActivityImport } from './ActivityImport';
 import { EmojiPicker } from './EmojiPicker';
 import { AddMenu } from './AddMenu';
 import { HelpOverlay } from './HelpOverlay';
@@ -137,7 +137,7 @@ export function Toolbar() {
 
       <ProjectsMenu />
       <TemplatesMenu />
-      <FitGlueImport />
+      <ActivityImport />
 
       <div className="mx-1 hidden h-6 w-px bg-white/10 md:block" />
 
