@@ -27,7 +27,7 @@ import {
   type ToolUseBlock,
 } from './client';
 import { EDITOR_TOOLS, runAction, type EditorTool } from '../actions';
-import { FITGLUE_TOOLS } from '../fitglueActions';
+import { ACTIVITY_TOOLS } from '../activityActions';
 import { styleProfileToPromptText, type StyleProfile } from './styleProfile';
 import { downloadBlob, exportPreview } from '../export';
 import { useEditor } from '../store';
@@ -82,13 +82,13 @@ export const PREVIEW_TOOL: AnthropicTool = {
   input_schema: { type: 'object', properties: {} },
 };
 
-/** Every tool the Copilot may call: the editor action layer, the FitGlue
- * tools (workout stats/charts/route from a public showcase), `preview_page`
- * and `ask_user`. */
+/** Every tool the Copilot may call: the editor action layer, the activity
+ * tools (the site's ready-made workout overlays), `preview_page` and
+ * `ask_user`. */
 export function buildCopilotTools(): AnthropicTool[] {
   return [
     ...EDITOR_TOOLS.map(editorToolToAnthropic),
-    ...FITGLUE_TOOLS.map(editorToolToAnthropic),
+    ...ACTIVITY_TOOLS.map(editorToolToAnthropic),
     PREVIEW_TOOL,
     ASK_USER_TOOL,
   ];
@@ -96,7 +96,7 @@ export function buildCopilotTools(): AnthropicTool[] {
 
 /** Tools that only read. Anything else changes what the user sees, so the
  * step that ran it gets a rendered preview attached. */
-const READ_ONLY_TOOLS = new Set(['get_snapshot', 'fitglue_list_activities', 'fitglue_load_activity', PREVIEW_TOOL_NAME]);
+const READ_ONLY_TOOLS = new Set(['get_snapshot', 'activity_list', 'activity_load', PREVIEW_TOOL_NAME]);
 
 export function changesCanvas(toolName: string): boolean {
   return !READ_ONLY_TOOLS.has(toolName);
@@ -117,7 +117,7 @@ export async function renderPreviewImage(): Promise<StyleImage | null> {
 /** Run a tool from either registry by name; same validation as `runAction`. */
 export function runCopilotTool(name: string, args: Record<string, unknown>): unknown {
   if (name === PREVIEW_TOOL_NAME) return 'Preview is attached by the Copilot loop.';
-  const fg = FITGLUE_TOOLS.find((t) => t.name === name);
+  const fg = ACTIVITY_TOOLS.find((t) => t.name === name);
   if (!fg) return runAction(name, args);
   const missing = (fg.parameters.required ?? []).filter((k) => args[k] === undefined || args[k] === null);
   if (missing.length) throw new Error(`Tool "${name}" is missing required argument(s): ${missing.join(', ')}.`);
@@ -186,13 +186,14 @@ export function buildCopilotSystemPrompt(profile: StyleProfile | null): string {
     '  is ready, tell them and offer export (export_png / export_carousel), or let them',
     '  export from the panel button.',
     '',
-    'FITGLUE (workout posts): if the user mentions a run/ride/workout, a fitglue.tech link or',
-    'an @handle, use the fitglue_* tools. fitglue_list_activities(handle) finds recent',
-    'activities; fitglue_load_activity(url or id) returns the title, stats (with ids), charts,',
-    'route and photos. Then place them: fitglue_add_stats_block for a tidy row of headline',
-    'numbers, fitglue_add_stat for one big number, fitglue_add_chart / fitglue_add_route for',
-    'transparent overlays (place them with place_image), and add_text with the returned title.',
-    'These numbers are real data — never round, invent or "improve" them.',
+    'ACTIVITIES (workout posts): if the user mentions a run/ride/race/workout or a',
+    'james.ripixel.co.uk/life link, use the activity_* tools. activity_list finds recent',
+    'activities; activity_load(id) lists its transparent overlays: layout-story /',
+    'layout-square (the whole stats card, to cover a full-bleed photo) and pieces (title,',
+    'stats, badge = PB / vs-PB stamp, route, splits, chart, sets, hr…). Place them with',
+    'activity_add_overlay over the user\'s photo (tone light on most photos, dark on bright',
+    'ones), then position with place_image. They are real numbers drawn by the site — never',
+    'retype, round or invent them as text.',
     '',
     'Available presets: ' + PRESETS.map((p) => `${p.id} (${p.width}×${p.height})`).join(', ') + '.',
     'Collage layouts: ' + LAYOUTS.map((l) => l.id).join(', ') + '.',

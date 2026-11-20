@@ -6,7 +6,7 @@ import { promptAddQrCode } from '../qr';
 import { exportDesign, downloadBlob, shareBlob, canShareFiles } from '../export';
 import { ProjectsMenu } from './ProjectsMenu';
 import { TemplatesMenu } from './TemplatesMenu';
-import { FitGlueImport } from './FitGlueImport';
+import { ActivityImport } from './ActivityImport';
 import { AnimateMenu } from './AnimateMenu';
 import { HelpOverlay } from './HelpOverlay';
 import { AiSettings } from './AiSettings';
@@ -190,7 +190,7 @@ export function MobileShell() {
         <div className="flex flex-wrap items-center gap-2">
           <ProjectsMenu />
           <TemplatesMenu />
-          <FitGlueImport />
+          <ActivityImport />
           {canRecordVideo() && <AnimateMenu />}
           <AiSettings />
           <AiGate>
